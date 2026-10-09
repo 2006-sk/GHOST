@@ -5,6 +5,7 @@ import { AGENTS } from './contract.js';
 import { setMode } from './health.js';
 import { startMockLoop, stopMockLoop } from './mock-loop.js';
 import { recordRunStart, setAgentState as pgAgentState } from './postgres.js';
+import { startGhostSessions, guildStatus } from './guild.js';
 
 const GUILD_API_KEY = process.env.GUILD_API_KEY || '';
 const GUILD_WORKSPACE = process.env.GUILD_WORKSPACE || '';
@@ -63,33 +64,38 @@ export function stop() {
   return { ok: true };
 }
 
-// Start one Guild session per agent. Confirm push-vs-pull with Kenil; built for
-// PUSH (agents POST to /events via Guild's emit tool).
+// Expose the live Guild status (auth + which ghost personas are deployed).
+export { guildStatus };
+
+// Start one real Guild session per persona via the Guild API (guild.js). Built
+// for PUSH (agents emit to /events). If the ghost personas aren't deployed to
+// the workspace yet, this returns a clear error and the caller falls back to the
+// mock loop so the siege still runs.
 async function startGuildSessions(run_id) {
-  if (!GUILD_API_KEY) {
-    return { ok: false, error: 'GUILD_API_KEY not set' };
-  }
   const emit_url = `${PUBLIC_URL}/events`;
-  const started = [];
-  for (const [agent_id, a] of Object.entries(AGENTS)) {
-    const input = {
-      run_id,
-      mode: 'real',
-      agent_persona: a.persona,
-      target: { base_url: `${PUBLIC_URL}/`, tool: 'target_http' },
-      emit_url,
-      shared_memory_ref: `${run_id}/memory`,
-      intensity: 'demo',
-    };
-    try {
-      // Placeholder for Kenil's Guild session-start call. Kept as a logged hook
-      // so real mode is wired the moment the Guild endpoint is confirmed.
-      console.log(`[orchestrator] would start Guild session`, JSON.stringify(input));
-      started.push(agent_id);
-      pgAgentState(run_id, agent_id, 'attacking');
-    } catch (err) {
-      console.error(`[orchestrator] Guild start failed for ${agent_id}`, err.message);
+  const input = {
+    run_id,
+    mode: 'real',
+    target: { base_url: `${PUBLIC_URL}/`, tool: 'target_http' },
+    emit_url,
+    shared_memory_ref: `${run_id}/memory`,
+    intensity: 'demo',
+  };
+  try {
+    const result = await startGhostSessions(input);
+    if (result.ok) {
+      for (const s of result.started) pgAgentState(run_id, `agent-${GHOST_IDX[s.persona] || ''}`, 'attacking');
+      return { ok: true, mode: 'real', agents: result.count, source: 'guild', sessions: result.started, emit_url };
     }
+    // Guild reachable but not ready (e.g. agents not deployed) → mock fallback.
+    console.warn('[orchestrator] Guild not ready:', result.error);
+    startMockLoop(run_id);
+    return { ok: true, mode: 'real', source: 'mock-loop (guild fallback)', guild: result.guild, note: result.error, emit_url };
+  } catch (err) {
+    console.error('[orchestrator] Guild start error:', err.message);
+    startMockLoop(run_id);
+    return { ok: true, mode: 'real', source: 'mock-loop (guild error)', error: err.message, emit_url };
   }
-  return { ok: true, mode: 'real', agents: started.length, source: 'guild', emit_url };
 }
+
+const GHOST_IDX = { recon: 1, netscan: 2, injection: 3, auth_bypass: 4, dos: 5, logic_abuse: 6 };

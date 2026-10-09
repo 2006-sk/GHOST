@@ -6,7 +6,7 @@ import { getHealth, resetRun, getMode } from './health.js';
 import { getStats, chEnabled } from './clickhouse.js';
 import { pgEnabled } from './postgres.js';
 import { clientCount } from './ws.js';
-import { prepare, run, stop, getStatus } from './orchestrator.js';
+import { prepare, run, stop, getStatus, guildStatus } from './orchestrator.js';
 import { mockLoopRunning } from './mock-loop.js';
 
 // The active run id for demo controls. /api/run sets it; triggers reuse it.
@@ -43,6 +43,12 @@ export function registerRoutes(app, { MOCK }) {
   });
 
   app.post('/api/stop', (_req, res) => res.json(stop()));
+
+  // Guild control-plane status: authenticated? which ghost personas deployed?
+  app.get('/api/guild/status', async (_req, res) => {
+    try { res.json(await guildStatus()); }
+    catch (err) { res.status(500).json({ authenticated: false, error: err.message }); }
+  });
 
   // --- the money shot -------------------------------------------------------
   // GET /trigger/critical — inject one detected critical ("caught in X ms").
