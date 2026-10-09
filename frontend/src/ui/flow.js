@@ -33,28 +33,28 @@ export function startFlow({ sim, hud, onFallback }) {
     boot(`target: ${folderName}`);
 
     if (USE_FALLBACK) {
-      titleEl.textContent = "Booting Wasmer sandbox…";
+      titleEl.textContent = "Starting Guild session…";
       await fakeBoot();
       return enter(true);
     }
     // real backend
     try {
-      boot("asking backend to prepare the sandbox…");
+      boot("asking the coordinator to start the Guild session…");
       const r = await fetch(`${API_BASE}/api/prepare`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ folder: folderName }),
       });
       const d = await r.json();
       boot(`backend mode: ${d.mode || "?"}`);
-      titleEl.textContent = d.mode === "wasmer" ? "Booting TowerBank inside Wasmer…" : "Starting target…";
+      titleEl.textContent = d.mode === "wasmer" ? "Starting Guild session on TowerBank…" : "Starting target…";
     } catch (e) {
       boot("backend unreachable — falling back to rehearsal");
       await fakeBoot();
       return enter(true);
     }
     const ready = await pollReady(60000);
-    if (!ready) { boot("timed out waiting for sandbox — rehearsal fallback"); await fakeBoot(); return enter(true); }
-    boot("sandbox ready ✓  launching the swarm…");
+    if (!ready) { boot("timed out starting Guild session — rehearsal fallback"); await fakeBoot(); return enter(true); }
+    boot("Guild session ready ✓  launching the swarm…");
     try { await fetch(`${API_BASE}/api/run`, { method: "POST" }); } catch {}
     await sleep(500);
     enter(false);
@@ -90,7 +90,7 @@ export function startFlow({ sim, hud, onFallback }) {
     logEl.scrollTop = logEl.scrollHeight;
   }
   async function fakeBoot() {
-    for (const s of ["initializing runtime…", "creating WASIX sandbox…", "loading TowerBank…", "sandbox ready ✓"]) {
+    for (const s of ["initializing runtime…", "starting Guild session…", "loading TowerBank target…", "Guild session ready ✓"]) {
       boot(s); await sleep(480);
     }
   }

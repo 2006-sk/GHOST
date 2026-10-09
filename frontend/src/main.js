@@ -206,14 +206,14 @@ async function pollWasmer() {
       wasmerBadge.style.display = "flex";
       wasmerBadge.innerHTML =
         `<span class="hex">⬢</span><div>` +
-        `<div><b>Wasmer</b> <span class="k">WASIX</span> · <span class="live">LIVE</span></div>` +
-        `<div class="k">${sb.package || "python"} · sandbox&nbsp;#${sb.generation} · boot ${sb.boot_ms ?? "?"}ms</div>` +
+        `<div><b>Guild</b> <span class="k">Session</span> · <span class="live">LIVE</span></div>` +
+        `<div class="k">${sb.package || "python"} · session&nbsp;#${sb.generation} · boot ${sb.boot_ms ?? "?"}ms</div>` +
         `</div><button class="respawn" id="respawn">↻ respawn</button>`;
       const rb = document.getElementById("respawn");
-      if (rb) rb.onclick = async () => { rb.textContent = "respawning…"; try { await fetch(`${API_BASE}/api/reset`, { method: "POST" }); } catch {} hud.toast?.("SANDBOX RESPAWNED"); };
+      if (rb) rb.onclick = async () => { rb.textContent = "respawning…"; try { await fetch(`${API_BASE}/api/reset`, { method: "POST" }); } catch {} hud.toast?.("GUILD SESSION RESTARTED"); };
     } else if (s.mode === "wasmer" && s.phase === "booting") {
       wasmerBadge.style.display = "flex";
-      wasmerBadge.innerHTML = `<span class="hex">⬢</span><span class="k">booting Wasmer sandbox…</span>`;
+      wasmerBadge.innerHTML = `<span class="hex">⬢</span><span class="k">starting Guild session…</span>`;
     }
   } catch {}
   setTimeout(pollWasmer, 3000);

@@ -98,7 +98,7 @@
       <div class="box">
         <h1>GHOST</h1>
         <h2>Select a project to attack</h2>
-        <p>Point the swarm at a codebase. Five autonomous agents will boot it in an isolated Wasmer sandbox and probe it for vulnerabilities — live.</p>
+        <p>Point the swarm at a codebase. Autonomous Guild agents start a live session against it and probe it for vulnerabilities — live.</p>
         <label class="drop" id="drop">
           <input type="file" id="folder-input" webkitdirectory directory multiple hidden />
           <div>📁 <b>Choose a folder</b> or drop one here</div>
@@ -112,9 +112,9 @@
     <div class="screen" id="screen-loading" hidden>
       <div class="box" style="text-align:center">
         <div class="spinner"></div>
-        <h1>PREPARING SANDBOX</h1>
-        <h2 id="loading-title">Booting Wasmer…</h2>
-        <p>Spinning up an isolated WASIX sandbox and loading the target. The command center opens the moment it's ready.</p>
+        <h1>STARTING GUILD SESSION</h1>
+        <h2 id="loading-title">Starting Guild session…</h2>
+        <p>Starting the Guild session and loading the target. The command center opens the moment it's ready.</p>
         <div class="barwrap"><div class="bar"></div></div>
         <div class="bootlog" id="boot-log"></div>
       </div>
@@ -215,7 +215,7 @@
       .code code{font:inherit}
       .muted{color:#666}
     </style>
-    <!-- live proof the target runs inside a Wasmer sandbox -->
+    <!-- live proof the target is running in a Guild session -->
     <style>
       #wasmer-badge{position:fixed;top:120px;left:50%;transform:translateX(-50%);z-index:22;display:none;align-items:center;gap:10px;
         background:#0a0a0fcc;border:1px solid #7de3a94d;border-left:3px solid #7de3a9;border-radius:10px;
