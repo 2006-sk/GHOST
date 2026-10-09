@@ -44,7 +44,26 @@ const ENDPOINTS = [
 
 const nowIso = () => new Date().toISOString();
 
-async function llm(messages, { max_tokens = 3000 } = {}) {
+// ── LLM response cache ───────────────────────────────────────────────────────
+// The LLM calls (~24 × ~5s) are the whole cost of a real run (~80s). The target
+// is deterministic, so we cache each plan/verdict to a file keyed by a stable
+// hash. A cached run skips the LLM entirely (still really hits the bank) and
+// finishes in seconds. Set REAL_CACHE=0 (or --no-cache) to force fresh calls.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { dirname as _dn } from 'node:path';
+const USE_CACHE = process.env.REAL_CACHE !== '0' && !process.argv.includes('--no-cache');
+const CACHE_FILE = new URL('../.cache/real-attack-llm.json', import.meta.url).pathname;
+let CACHE = {};
+if (USE_CACHE && existsSync(CACHE_FILE)) { try { CACHE = JSON.parse(readFileSync(CACHE_FILE, 'utf8')); } catch { CACHE = {}; } }
+let cacheHits = 0, cacheMiss = 0;
+function saveCache() {
+  if (!USE_CACHE) return;
+  try { mkdirSync(_dn(CACHE_FILE), { recursive: true }); writeFileSync(CACHE_FILE, JSON.stringify(CACHE, null, 2)); } catch { /* noop */ }
+}
+const keyOf = (s) => createHash('sha1').update(s).digest('hex').slice(0, 16);
+
+async function llmRaw(messages, max_tokens) {
   // NOTE: GLM-5.3-Flash is a reasoning model — it spends ~700 tokens thinking
   // before the answer, so budgets must be generous or content comes back empty.
   const res = await fetch(`${NEBIUS_BASE}/chat/completions`, {
@@ -55,6 +74,18 @@ async function llm(messages, { max_tokens = 3000 } = {}) {
   if (!res.ok) throw new Error(`LLM ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const d = await res.json();
   return d.choices?.[0]?.message?.content || '';
+}
+
+// cacheKey: a stable string identifying this call; same key → cached answer.
+async function llm(messages, { max_tokens = 3000, cacheKey } = {}) {
+  if (USE_CACHE && cacheKey) {
+    const k = keyOf(cacheKey);
+    if (CACHE[k] != null) { cacheHits++; return CACHE[k]; }
+    const out = await llmRaw(messages, max_tokens);
+    CACHE[k] = out; cacheMiss++; saveCache();
+    return out;
+  }
+  return llmRaw(messages, max_tokens);
 }
 
 function parseJsonArray(text) {
@@ -96,7 +127,7 @@ async function runPersona(a) {
       `Known endpoints (use these EXACT paths — do not invent others):\n${ENDPOINTS.map((e) => '  ' + e).join('\n')}\n` +
       `Propose up to ${MAX} concrete HTTP attacks against the relevant endpoints. Return a JSON array of objects: ` +
       `{"path":"/api/...","method":"GET|POST","body":{...}|null,"headers":{...}|null,"technique":"short label","intent":"what success looks like"}.` },
-  ]).catch((e) => { console.error(`[${a.persona}] plan error`, e.message); return '[]'; });
+  ], { cacheKey: `plan:${a.persona}:${TARGET}:${MAX}` }).catch((e) => { console.error(`[${a.persona}] plan error`, e.message); return '[]'; });
 
   let plans = parseJsonArray(planText).slice(0, MAX);
   if (!plans.length) plans = [{ path: '/api/health', method: 'GET', technique: 'probe', intent: 'liveness' }];
@@ -113,7 +144,7 @@ async function runPersona(a) {
       { role: 'user', content:
         `Attack: ${JSON.stringify(plan)}\nHTTP status: ${resp.status}\nResponse (truncated):\n${resp.bodyText}\n\n` +
         `Return {"weakness":true|false,"severity":"info|low|medium|high|critical","description":"one concrete sentence of what was proven"}.` },
-    ], { max_tokens: 1500 }).catch(() => '{}');
+    ], { max_tokens: 1500, cacheKey: `verdict:${plan.method}:${plan.path}:${JSON.stringify(plan.body || '')}:${resp.status}` }).catch(() => '{}');
 
     let v = {};
     try { v = JSON.parse((verdictText.match(/\{[\s\S]*\}/) || ['{}'])[0]); } catch { v = {}; }
@@ -140,6 +171,6 @@ async function main() {
   const recon = AGENTS[0];
   await runPersona(recon);
   await Promise.all(AGENTS.slice(1).map(runPersona));
-  console.error(`done. run_id=${RUN_ID}`);
+  console.error(`done. run_id=${RUN_ID} · cache ${USE_CACHE ? `on (hits=${cacheHits}, miss=${cacheMiss})` : 'off'}`);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

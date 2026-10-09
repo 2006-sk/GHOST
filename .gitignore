@@ -21,3 +21,7 @@ __pycache__/
 # embedded postgres (PGlite)
 .pgdata/
 **/.pgdata/
+
+# llm cache
+.cache/
+**/.cache/
