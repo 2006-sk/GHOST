@@ -14,7 +14,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 def load_env(path=ROOT / ".env"):
     if path.exists():
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
@@ -54,4 +54,4 @@ def query(sql, params=None, body=None, gz=False, timeout=600):
 
 def sql_file(path):
     """Read a .sql file, dropping `--` comment lines."""
-    return "\n".join(l for l in pathlib.Path(path).read_text().splitlines() if not l.strip().startswith("--"))
+    return "\n".join(l for l in pathlib.Path(path).read_text(encoding="utf-8").splitlines() if not l.strip().startswith("--"))

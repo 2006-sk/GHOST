@@ -15,7 +15,7 @@ replayer/load.py            gzip JSONEachRow bulk insert, parallel batches
 ```
 
 ## For Shresth (coordinator)
-- **Insert URL:** `CLICKHOUSE_URL` (ClickHouse Cloud HTTPS, port 8443), user `default` —
+- **Insert URL:** `CLICKHOUSE_URL` (ClickHouse Cloud HTTPS, port 8443), user `default`;
   URL and password sent privately, not in the repo. `ghost.events` already exists.
 - **Insert:** your current `INSERT INTO ghost.events FORMAT JSONEachRow` rows from
   `ingest.js` load as-is (nulls, JSON booleans, ISO `...Z` timestamps all verified).
