@@ -9,6 +9,8 @@ ch.py                       stdlib ClickHouse HTTP client (reads repo-root .env)
 detect.py                   run all rules over a run: flagged / agreement / exec ms
 clickhouse/schema.sql       ghost.events — columns match backend/src/ingest.js row
 clickhouse/stats.sql        §4.5 `stats` message, one JSON row
+clickhouse/users.sql        read-only `librechat_ro` user for LibreChat MCP
+librechat/                  LibreChat + ClickHouse MCP ("ask your data"), see its README
 clickhouse/detection/*.sql  6 rules, each returns (seq, rule) for {run:String}
 replayer/generate.py        synthetic campaigns, verdicts computed exactly like the SQL
 replayer/load.py            gzip JSONEachRow bulk insert, parallel batches
