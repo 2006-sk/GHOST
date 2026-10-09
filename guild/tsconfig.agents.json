@@ -1,0 +1,13 @@
+{
+  "comment": "Typecheck the six Guild agent entrypoints. Requires @guildai/agents-sdk to be installed (npm i -D @guildai/agents-sdk).",
+  "extends": "./tsconfig.json",
+  "include": [
+    "agents/recon.ts",
+    "agents/netscan.ts",
+    "agents/injection.ts",
+    "agents/auth_bypass.ts",
+    "agents/dos.ts",
+    "agents/logic_abuse.ts"
+  ],
+  "exclude": ["node_modules"]
+}

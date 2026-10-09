@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/2006-sk/GHOST/guild/session-input.schema.json",
+  "title": "GHOST agent session input (master.md §4.7)",
+  "description": "The typed input every GHOST agent session accepts. `shared_memory` is a Kenil extension used as MOCK shared memory (recon seeds it for the other personas); it does not affect the coordinator-facing §4.4 wire contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "mode", "agent_persona", "target", "emit_url", "shared_memory_ref"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "mode": { "type": "string", "enum": ["mock", "real"] },
+    "agent_persona": {
+      "type": "string",
+      "enum": ["recon", "netscan", "injection", "auth_bypass", "dos", "logic_abuse"]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_url"],
+      "properties": {
+        "base_url": { "type": "string" },
+        "tool": { "type": "string", "default": "target_http" }
+      }
+    },
+    "emit_url": { "type": "string" },
+    "shared_memory_ref": { "type": "string" },
+    "intensity": { "type": "string", "enum": ["demo", "full"], "default": "demo" },
+    "shared_memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "components": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "notes": { "type": "array", "items": { "type": "string" }, "default": [] }
+      },
+      "default": { "components": [], "notes": [] }
+    }
+  }
+}

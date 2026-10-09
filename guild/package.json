@@ -1,0 +1,22 @@
+{
+  "name": "ghost-guild-agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GHOST — six scripted red-team personas that emit detection-validation events (MOCK mode).",
+  "scripts": {
+    "mock": "tsx orchestration/local-mock.ts",
+    "mock:post": "tsx orchestration/local-mock.ts --post",
+    "typecheck": "tsc -p tsconfig.json",
+    "typecheck:agents": "tsc -p tsconfig.agents.json"
+  },
+  "dependencies": {
+    "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "comment:guild-sdk": "The six agent entrypoints import @guildai/agents-sdk, which is provided by the Guild runtime (and installed by `guild agent init`). It is NOT required to run `npm run mock`. To typecheck the agent files locally, run `npm i -D @guildai/agents-sdk` then `npm run typecheck:agents`. The Guild runtime also supplies its own zod to deployed agents."
+}
