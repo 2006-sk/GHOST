@@ -21,10 +21,13 @@ ${pc.bold(pc.magenta('ghost'))} — terminal launcher for a GHOST siege
 
 ${pc.bold('Usage')}
   ghost run [path]            launch a siege against a folder (default: cwd), open dashboard
+  ghost demo [path]           launch the DEMO siege (cached, paced ~30s) + open dashboard
   ghost watch <run_id>        attach to a running/finished siege, stream lines
   ghost status [run_id]       one-shot coverage/health/events, then exit
 
-${pc.bold('Flags')} (run)
+${pc.bold('Flags')} (run / demo)
+  --demo                      demo mode: cached, deterministic, paced siege
+  --duration <sec>            demo length in seconds (default 30)
   --mock / --real             override mode (default: coordinator's env)
   --coordinator <url>         default ${DEFAULTS.coordinator}  (env COORDINATOR_URL)
   --dashboard  <url>          default ${DEFAULTS.dashboard}   (env DASHBOARD_URL)
@@ -36,6 +39,9 @@ ${pc.bold('Flags')} (run)
 async function main() {
   switch (command) {
     case 'run':
+      return cmdRun(parsed);
+    case 'demo':
+      parsed.flags.demo = true;     // ghost demo == ghost run --demo
       return cmdRun(parsed);
     case 'watch': {
       const runId = parsed._[0];

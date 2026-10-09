@@ -1,6 +1,9 @@
 // orchestrator.js — /api/prepare + /api/run. Starts Guild sessions (real) or the
 // mock loop (mock). Guild input schema is master.md §4.7 (Kenil owns it).
 
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { AGENTS } from './contract.js';
 import { setMode } from './health.js';
 import { startMockLoop, stopMockLoop } from './mock-loop.js';
@@ -10,6 +13,33 @@ import { startGhostSessions, guildStatus } from './guild.js';
 const GUILD_API_KEY = process.env.GUILD_API_KEY || '';
 const GUILD_WORKSPACE = process.env.GUILD_WORKSPACE || '';
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
+const SCRIPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts');
+
+// Demo mode: the CACHED, paced siege. Spawns the SEMGREP agent (static findings)
+// and the cached real-LLM red-team (replayed over durationMs, no model calls).
+export function startDemo(run_id, { durationMs = 30000, target, maxPerAgent = 2 } = {}) {
+  setMode(run_id, 'mock');
+  stopMockLoop();
+  recordRunStart(run_id, 'demo');
+  const port = process.env.COORDINATOR_PORT || 8080;
+  const env = {
+    ...process.env,
+    RUN_ID: run_id,
+    EMIT_URL: `http://localhost:${port}/events`,
+    TARGET_URL: target || process.env.TARGET_URL || 'http://localhost:4000',
+    DEMO_DURATION_MS: String(durationMs),
+    MAX_PER_AGENT: String(maxPerAgent),
+  };
+  const spawnScript = (name) => {
+    const c = spawn(process.execPath, [join(SCRIPTS_DIR, name)], { env, stdio: 'ignore', detached: true });
+    c.on('error', (e) => console.error(`[demo] ${name} spawn error`, e.message));
+    c.unref();
+  };
+  spawnScript('semgrep-agent.mjs'); // SEMGREP agent (fast, emits its findings)
+  spawnScript('real-attack.mjs');   // cached red-team, paced over durationMs
+  for (const id of Object.keys(AGENTS)) pgAgentState(run_id, id, 'attacking');
+  return { ok: true, run_id, mode: 'demo', source: 'cached real-LLM + semgrep (paced)', durationMs };
+}
 
 // phase is surfaced by GET /api/status
 let phase = 'idle'; // idle -> preparing -> ready -> running

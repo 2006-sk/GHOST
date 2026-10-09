@@ -40,9 +40,12 @@ export function resolveConfig(flags) {
   const dashboard = (flags.dashboard || DEFAULTS.dashboard).replace(/\/$/, '');
   // coordinator http -> ws url
   const wsUrl = coordinator.replace(/^http/, 'ws') + '/ws';
-  // mode: --mock / --real override; else let the coordinator decide (undefined)
+  // mode: --mock / --real / --demo / --mode <x> ; else coordinator decides
   let mode;
   if (flags.mock) mode = 'mock';
   if (flags.real) mode = 'real';
-  return { coordinator, dashboard, wsUrl, mode };
+  if (flags.demo) mode = 'demo';
+  if (flags.mode) mode = String(flags.mode).toLowerCase();
+  const target = flags.target || ''; // target URL for demo (bank), optional
+  return { coordinator, dashboard, wsUrl, mode, target };
 }

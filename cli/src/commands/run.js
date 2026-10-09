@@ -26,7 +26,7 @@ export async function cmdRun(parsed) {
   try {
     const h = await api.health();
     log.ok(`connecting to coordinator… ${pc.dim(`(${cfg.coordinator})`)}`);
-    if (cfg.mode && h.mode && cfg.mode !== h.mode) {
+    if (cfg.mode && cfg.mode !== 'demo' && h.mode && cfg.mode !== h.mode) {
       log.info(`note: coordinator is in ${h.mode} mode; --${cfg.mode} is advisory`);
     }
   } catch (err) {
@@ -44,17 +44,28 @@ export async function cmdRun(parsed) {
     endpoints: meta.endpoints,
     mode: cfg.mode,
   });
-  log.step('preparing sandbox…');
+  log.step('starting Guild session…');
 
   // 3. wait for ready, rendering phases
   await pollStatus(api);
-  log.ok('sandbox ready');
+  log.ok('Guild session ready');
 
-  // 4. run
-  log.step('launching 6 agents…');
-  const runRes = await api.run(flags.runId ? { run_id: flags.runId } : {});
+  // 4. run — demo (cached, paced ~30s) or a normal run
+  const demo = flags.demo === true || cfg.mode === 'demo';
+  let runRes;
+  if (demo) {
+    log.step('launching siege — demo mode (cached, ~30s)…');
+    runRes = await api.demo({
+      ...(flags.runId ? { run_id: flags.runId } : {}),
+      ...(flags.duration ? { durationMs: Number(flags.duration) * 1000 } : {}),
+      target: cfg.target || undefined,
+    });
+  } else {
+    log.step('launching 7 agents…');
+    runRes = await api.run(flags.runId ? { run_id: flags.runId } : {});
+  }
   const runId = runRes.run_id;
-  log.ok(`agents launched  ${pc.dim(`run_id: ${runId}`)}`);
+  log.ok(`siege launched  ${pc.dim(`run_id: ${runId}${demo ? ' · demo/cached' : ''}`)}`);
 
   // 5. open dashboard
   const url = `${cfg.dashboard}/?run=${encodeURIComponent(runId)}`;

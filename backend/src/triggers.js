@@ -6,7 +6,7 @@ import { getHealth, resetRun, getMode } from './health.js';
 import { getStats, chEnabled } from './clickhouse.js';
 import { pgEnabled, pgMode, listRuns, listAgentsForRun, recordRunEnd } from './postgres.js';
 import { clientCount } from './ws.js';
-import { prepare, run, stop, getStatus, guildStatus } from './orchestrator.js';
+import { prepare, run, stop, getStatus, guildStatus, startDemo } from './orchestrator.js';
 import { mockLoopRunning } from './mock-loop.js';
 
 // The active run id for demo controls. /api/run sets it; triggers reuse it.
@@ -40,6 +40,14 @@ export function registerRoutes(app, { MOCK }) {
     if (req.body?.run_id) activeRun = req.body.run_id;
     const out = await run(activeRun, mode());
     res.status(out.ok ? 200 : 400).json({ ...out, run_id: activeRun });
+  });
+
+  // Demo mode (cached): paced ~30s replay of the real-LLM siege + SEMGREP.
+  app.post('/api/demo', (req, res) => {
+    activeRun = (req.body && req.body.run_id) || `run_demo_${stamp()}_${Math.floor(Math.random() * 1000)}`;
+    const durationMs = (req.body && Number(req.body.durationMs)) || 30000;
+    const out = startDemo(activeRun, { durationMs, target: req.body && req.body.target });
+    res.json({ ...out, run_id: activeRun });
   });
 
   app.post('/api/stop', async (_req, res) => {

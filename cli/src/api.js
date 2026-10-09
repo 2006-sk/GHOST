@@ -38,6 +38,7 @@ export function makeApi(base) {
     prepare: (body) => req(`${base}/api/prepare`, json(body)),
     status: () => req(`${base}/api/status`),
     run: (body) => req(`${base}/api/run`, json(body)),
+    demo: (body) => req(`${base}/api/demo`, json(body)),
     stop: () => req(`${base}/api/stop`, { method: 'POST' }),
     state: () => req(`${base}/state`),
   };
