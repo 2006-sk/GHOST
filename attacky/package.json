@@ -1,0 +1,15 @@
+{
+  "name": "attacky-towerbank",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TowerBank — a DELIBERATELY VULNERABLE demo banking app. Target for the GHOST red-team siege. Do NOT deploy; localhost only.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

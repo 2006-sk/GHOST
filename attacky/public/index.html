@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TowerBank — Online Banking</title>
+  <style>
+    :root { --navy:#0b1e3f; --gold:#c9a227; --ink:#12223f; --bg:#f4f6fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:var(--navy); color:#fff; padding:14px 24px; display:flex; align-items:center; gap:12px; }
+    header .logo { width:28px;height:28px;border:2px solid var(--gold);border-radius:4px;display:grid;place-items:center;color:var(--gold);font-weight:800; }
+    header h1 { font-size:18px; margin:0; letter-spacing:.5px; }
+    header .tag { margin-left:auto; font-size:12px; opacity:.7; }
+    .wrap { max-width:960px; margin:28px auto; padding:0 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .card { background:#fff; border:1px solid #e3e8f2; border-radius:12px; padding:20px; box-shadow:0 1px 2px #0b1e3f0a; }
+    .card h2 { margin:0 0 12px; font-size:15px; color:var(--navy); }
+    label { display:block; font-size:12px; color:#5a6b86; margin:10px 0 4px; }
+    input { width:100%; padding:9px 11px; border:1px solid #d3dbe9; border-radius:8px; font:inherit; }
+    button { margin-top:14px; background:var(--navy); color:#fff; border:0; padding:10px 16px; border-radius:8px; font-weight:600; cursor:pointer; }
+    button.alt { background:#fff; color:var(--navy); border:1px solid var(--navy); }
+    pre { background:#0b1e3f; color:#d8e2f2; padding:12px; border-radius:8px; overflow:auto; font-size:12px; max-height:220px; }
+    .full { grid-column:1 / -1; }
+    .muted { color:#7a8aa6; font-size:12px; }
+    .pill { display:inline-block; background:#fdecec; color:#b4232a; font-size:11px; padding:2px 8px; border-radius:20px; font-weight:700; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">T</div>
+    <h1>TowerBank</h1>
+    <span class="tag">Online Banking · Member FDIC (not really)</span>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <h2>Sign in</h2>
+      <label>Username</label><input id="u" value="alice" />
+      <label>Password</label><input id="p" type="password" value="hunter2" />
+      <button onclick="login()">Sign in</button>
+      <p class="muted">Demo users: alice / bob / carol</p>
+    </div>
+    <div class="card">
+      <h2>Find a customer</h2>
+      <label>Search</label><input id="q" value="alice" />
+      <button class="alt" onclick="search()">Search</button>
+      <p class="muted">Looks up account holders by name.</p>
+    </div>
+    <div class="card full">
+      <h2>Response <span class="pill">INTENTIONALLY VULNERABLE DEMO</span></h2>
+      <pre id="out">{ }</pre>
+      <p class="muted">TowerBank is a deliberately insecure target app for the GHOST red-team siege. Localhost only.</p>
+    </div>
+  </div>
+  <script>
+    const out = (d) => document.getElementById("out").textContent = JSON.stringify(d, null, 2);
+    async function login() {
+      const r = await fetch("/api/login", { method:"POST", headers:{"content-type":"application/json"},
+        body: JSON.stringify({ username: u.value, password: p.value }) });
+      out(await r.json());
+    }
+    async function search() {
+      const r = await fetch("/api/search?q=" + encodeURIComponent(q.value));
+      out(await r.json());
+    }
+  </script>
+</body>
+</html>

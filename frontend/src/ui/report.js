@@ -285,6 +285,7 @@ export function createReport({ onRelaunch } = {}) {
   AGENTS.forEach((a) => (chains[a.id] = []));
   let shown = false, finishScheduled = false, startTs = 0, healthZero = false, runEnded = false;
   let lastHealth = 100; // most recent tower_health seen, for the report header
+  let openProfileId = null; // which agent card is open (for live decision-log refresh)
   const FLOOR_MS = 28000;  // never show results before this (keeps the siege on screen)
   const CEIL_MS = 78000;   // safety: show by here even if the run-end signal is missed
 
@@ -297,8 +298,17 @@ export function createReport({ onRelaunch } = {}) {
     if (!startTs) startTs = Date.now();
     const id = evt.agent_id;
     if (id && chains[id]) {
-      chains[id].push({ type: evt.event_type, component: evt.target_component, description: evt.description, severity: evt.severity, ts: evt.timestamp });
+      chains[id].push({
+        type: evt.event_type,
+        component: evt.target_component,
+        description: evt.description,
+        severity: evt.severity,
+        rule: evt.rule,
+        ts: evt.ts || evt.timestamp || new Date().toISOString(),
+      });
       updateChip(id);
+      // live log: if this agent's card is open, refresh it as decisions stream in
+      if (openProfileId === id && modal && !modal.hidden) renderProfile(id);
     }
     if (evt.event_type === "weakness_found") {
       const key = `${evt.target_component}|${evt.description}`;
@@ -353,30 +363,51 @@ export function createReport({ onRelaunch } = {}) {
   }
 
   // ── attacker profile + full chain ──
-  function showProfile(id) {
+  // one decision line, in plain English — what the agent chose to do and why.
+  function decisionLine(c, agentLabel) {
+    const t = clockOf(c.ts);
+    if (c.type === "attack_started")
+      return `<li class="dl probe"><span class="dl-t">${t}</span><span class="dl-icon">▸</span><span class="dl-txt">Probing <b>${esc(c.component || "/")}</b> — looking for a way in…</span></li>`;
+    if (c.type === "weakness_found")
+      return `<li class="dl hit sev-row-${c.severity}"><span class="dl-t">${t}</span><span class="dl-icon">✔</span><span class="dl-txt"><b class="sev sev-${c.severity}">${(c.severity || "").toUpperCase()}</b> Broke in at <b>${esc(c.component || "")}</b> — ${esc(c.description || "")}${c.rule ? ` <span class="dl-rule">· flagged: ${esc(c.rule)}</span>` : ""}</span></li>`;
+    if (c.type === "attack_result")
+      return `<li class="dl held"><span class="dl-t">${t}</span><span class="dl-icon">✕</span><span class="dl-txt">Tried <b>${esc(c.component || "")}</b> — held, no weakness. Moving on.</span></li>`;
+    return `<li class="dl"><span class="dl-t">${t}</span><span class="dl-icon">•</span><span class="dl-txt">${esc(c.description || c.type)}</span></li>`;
+  }
+  function clockOf(ts) { try { return new Date(ts).toISOString().slice(11, 19); } catch { return "--:--:--"; } }
+
+  // Build (or re-build) the open agent card. Called on click and live on each
+  // new event for that agent, so the decision log streams while the siege runs.
+  function renderProfile(id) {
     const a = AGENT_BY_ID[id];
     if (!a || !modal) return;
     const chain = chains[id];
     const weak = chain.filter((c) => c.type === "weakness_found");
+    const live = !shown; // a run is in progress (results page not up yet)
     const rows = chain.length
-      ? chain.map((c) => {
-          const icon = c.type === "weakness_found" ? "💥" : c.type === "attack_started" ? "➤" : c.type === "attack_result" ? "·" : "•";
-          const sev = c.type === "weakness_found" ? `<b class="sev sev-${c.severity}">${c.severity}</b> ` : "";
-          return `<li>${icon} <span class="cmp">${c.component || ""}</span> ${sev}<span class="dsc">${c.description || ""}</span></li>`;
-        }).join("")
-      : "<li class='muted'>no actions yet</li>";
+      ? chain.map((c) => decisionLine(c, a.label)).join("")
+      : "<li class='muted'>waiting for first action…</li>";
     modal.innerHTML = `
       <div class="pcard" style="--c:${a.hex}">
         <button class="x" id="pclose">✕</button>
-        <div class="phead"><span class="pdot"></span><div><h3>${a.label}</h3><div class="ptag">${a.tag} · brain: ${a.brain}</div></div></div>
-        <p class="pblurb">${a.blurb}</p>
-        <div class="pstat">actions: <b>${chain.length}</b> · confirmed weaknesses: <b>${weak.length}</b></div>
-        <div class="panel-label">ACTION CHAIN</div>
-        <ul class="chain">${rows}</ul>
+        <div class="phead"><span class="pdot"></span><div><h3>${a.label}</h3>
+          <div class="ptag">${a.tag} · brain: ${esc(a.brain)}${live ? ' <span class="live-dot">● LIVE</span>' : ""}</div></div></div>
+        <p class="pblurb">${esc(a.blurb)}</p>
+        <div class="pstat">decisions: <b>${chain.length}</b> · weaknesses found: <b>${weak.length}</b></div>
+        <div class="panel-label">DECISION LOG — what ${a.label} is doing, step by step</div>
+        <ul class="chain" id="chain-scroll">${rows}</ul>
       </div>`;
     modal.hidden = false;
-    document.getElementById("pclose").onclick = () => (modal.hidden = true);
-    modal.onclick = (e) => { if (e.target === modal) modal.hidden = true; };
+    document.getElementById("pclose").onclick = () => { modal.hidden = true; openProfileId = null; };
+    modal.onclick = (e) => { if (e.target === modal) { modal.hidden = true; openProfileId = null; } };
+    const sc = document.getElementById("chain-scroll");
+    if (sc) sc.scrollTop = sc.scrollHeight; // keep newest decision in view (live)
+  }
+
+  function showProfile(id) {
+    if (!AGENT_BY_ID[id]) return;
+    openProfileId = id;
+    renderProfile(id);
   }
 
   // ── results / after page ──

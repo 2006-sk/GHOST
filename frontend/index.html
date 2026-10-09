@@ -42,7 +42,7 @@
       </section>
 
       <aside id="roster">
-        <div class="panel-label">SWARM · 5 AGENTS</div>
+        <div class="panel-label">SWARM · 6 AGENTS</div>
         <ul id="roster-list"></ul>
       </aside>
 
@@ -137,9 +137,20 @@
       .ptag{color:#8a90a6;font-size:12px;margin-top:2px}.pblurb{color:#b8bed0;font-size:13px;line-height:1.6}
       .pstat{font-size:12px;color:#9aa0b5;margin:10px 0 6px}.pstat b{color:#fff}
       .panel-label{font-size:10px;letter-spacing:.25em;color:#6b7185;margin:8px 0}
-      .chain{list-style:none;margin:0;padding:0;font-size:12px;max-height:40vh;overflow:auto}
+      .chain{list-style:none;margin:0;padding:0;font-size:12px;max-height:42vh;overflow:auto;scroll-behavior:smooth}
       .chain li{padding:5px 0;border-bottom:1px solid #ffffff10;line-height:1.4}
       .chain .cmp{color:#cdd2e0}.chain .dsc{color:#8a90a6}.chain .muted{color:#555}
+      /* live decision log */
+      .dl{display:grid;grid-template-columns:58px 16px 1fr;gap:8px;align-items:start;padding:6px 0;border-bottom:1px solid #ffffff0d}
+      .dl-t{color:#5a6075;font-size:11px;font-variant-numeric:tabular-nums}
+      .dl-icon{text-align:center;font-weight:800}
+      .dl-txt{color:#c3c8d6;line-height:1.45}.dl-txt b{color:#eef1f8}
+      .dl.probe .dl-icon{color:#8a90a6}
+      .dl.hit .dl-icon{color:#ff6b6b}
+      .dl.held .dl-icon{color:#4a5068}
+      .dl-rule{color:#6fd3ff}
+      .live-dot{color:#3fd07f;font-size:10px;font-weight:800;margin-left:8px;animation:livep 1.4s ease-in-out infinite}
+      @keyframes livep{0%,100%{opacity:1}50%{opacity:.4}}
       .sev{border-radius:4px;padding:0 5px;font-size:10px;font-weight:800}
       .sev-critical{color:#ff2d55}.sev-high{color:#ff9d3c}.sev-medium{color:#ffe14d}.sev-low{color:#9aa0b5}
       .crit-flag{position:fixed;z-index:40;transform:translate(-50%,-140%);color:#fff;background:#ff2d55;font:700 11px/1 ui-monospace,Menlo,monospace;
