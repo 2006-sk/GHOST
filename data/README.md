@@ -15,8 +15,8 @@ replayer/load.py            gzip JSONEachRow bulk insert, parallel batches
 ```
 
 ## For Shresth (coordinator)
-- **Insert URL:** `CLICKHOUSE_URL=https://ar2xp68m2g.eastus2.azure.clickhouse.cloud:8443`,
-  user `default`, password sent privately. `ghost.events` already exists.
+- **Insert URL:** `CLICKHOUSE_URL` (ClickHouse Cloud HTTPS, port 8443), user `default` —
+  URL and password sent privately, not in the repo. `ghost.events` already exists.
 - **Insert:** your current `INSERT INTO ghost.events FORMAT JSONEachRow` rows from
   `ingest.js` load as-is (nulls, JSON booleans, ISO `...Z` timestamps all verified).
   ```bash
@@ -42,6 +42,7 @@ replayer/load.py            gzip JSONEachRow bulk insert, parallel batches
 ## Commands
 ```bash
 python replayer/load.py --run-id run_demo --rows 1000000 --replace   # ~30s
+# --replace drops the WHOLE run partition, live coordinator rows included
 python detect.py --run-id run_demo --write-latency                   # rules + timings
 ```
 
