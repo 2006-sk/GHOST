@@ -10,6 +10,26 @@ interface:
 endpoints:
   anthropic:
     fetch: true
+    titleModel: claude-sonnet-4-6
+
+# Default preset for the demo. Uses claude-sonnet-4-6 with thinking off:
+# Claude 5.x models always return thinking blocks between tool calls, and
+# LibreChat 0.8.7 drops their text when replaying multi-tool turns, so Anthropic
+# rejects the follow-up ("thinking.thinking: Field required").
+modelSpecs:
+  prioritize: true
+  list:
+    - name: ghost-analyst
+      label: "GHOST Analyst"
+      description: "Claude Sonnet 4.6 over the ClickHouse attack data"
+      default: true
+      mcpServers:
+        - GHOST-ClickHouse
+      preset:
+        endpoint: anthropic
+        model: claude-sonnet-4-6
+        thinking: false
+        maxOutputTokens: 4096
 
 mcpSettings:
   allowedDomains:
@@ -35,6 +55,12 @@ mcpServers:
         detected Bool (true = caught by a detection rule, false = missed / slipped through),
         rule (sqli_signature, auth_bypass, logic_anomaly, dos_flood, recon_sweep,
               netscan_portsweep; '' when missed), detect_latency_ms, confidence.
+      "Attack type" means agent_persona (the 6 red-team agents); "technique" means the payload label.
+      detect_latency_ms on the run_demo history = the measured ClickHouse execution time of that
+      rule's detection query over the WHOLE run (~1M rows), so it is constant per rule by design:
+      signature rules are per-event filters (~10-20 ms), windowed rules (dos_flood, recon_sweep,
+      netscan_portsweep) aggregate per src_ip per 1s/10s window (~50-100 ms). Explain it that way;
+      it is not a per-event pipeline delay. Live coordinator rows (seq < 1000000000) carry per-event latencies.
       Coverage % = 100 * countIf(detected) / count(). "Missed" = NOT detected.
       Default to run_id = 'run_demo' unless the user names another run.
       Always aggregate in SQL (GROUP BY) instead of pulling raw rows; LIMIT any row listing to 20.
