@@ -1,0 +1,70 @@
+# GHOST "ask your data": LibreChat + ClickHouse MCP (ClickHouse Agentic Data Stack,
+# slimmed: no Langfuse / local ClickHouse / RAG). MCP talks to ClickHouse Cloud as
+# the read-only `librechat_ro` user.
+#   cp ../../.env values via setup.sh, then: docker compose up -d  ->  http://localhost:3080
+
+services:
+  clickhouse-mcp:
+    image: mcp/clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST}
+      CLICKHOUSE_PORT: "8443"
+      CLICKHOUSE_SECURE: "true"
+      CLICKHOUSE_USER: ${CLICKHOUSE_RO_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_RO_PASSWORD}
+      CLICKHOUSE_DATABASE: ghost
+      CLICKHOUSE_MCP_SERVER_TRANSPORT: http
+      CLICKHOUSE_MCP_BIND_HOST: 0.0.0.0
+      CLICKHOUSE_MCP_BIND_PORT: "8000"
+      CLICKHOUSE_MCP_AUTH_TOKEN: ${CLICKHOUSE_MCP_AUTH_TOKEN}
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.create_connection(('localhost',8000),2); s.close()\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  librechat:
+    image: ghcr.io/danny-avila/librechat:latest
+    restart: unless-stopped
+    ports:
+      - "3080:3080"
+    depends_on:
+      mongodb:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+      clickhouse-mcp:
+        condition: service_healthy
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3080
+      - MONGO_URI=mongodb://mongodb:27017/LibreChat
+      - MEILI_HOST=http://meilisearch:7700
+    volumes:
+      - ./.env:/app/.env
+      - ./librechat.yaml:/app/librechat.yaml
+      - librechat_uploads:/app/uploads
+
+  mongodb:
+    image: mongo:8.0.17
+    restart: unless-stopped
+    command: mongod --noauth
+    volumes:
+      - mongodb_data:/data/db
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12.3
+    restart: unless-stopped
+    environment:
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    volumes:
+      - meili_data:/meili_data
+
+volumes:
+  mongodb_data:
+  meili_data:
+  librechat_uploads:
