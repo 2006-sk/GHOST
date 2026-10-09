@@ -70,6 +70,11 @@ function dispatch(evt) {
   // findings + integrity chart so each siege is clean (and results aren't
   // wiped mid-run by a stray health-100 event).
   if (evt.event_type === "target_health" && evt.description === "siege begins") { report.reset?.(); hud.resetHealth?.(); }
+  // The coordinator sends "siege complete" when events stop → roll to results.
+  if (evt.event_type === "target_health" && evt.description === "siege complete") {
+    setTimeout(() => report.forceShow?.(), 1200); // let the last strikes animate first
+    return;
+  }
   report.record(evt);
   if (typeof evt.tower_health === "number") { tower.setHealth(evt.tower_health); hud.setHealth(evt.tower_health); report.maybeFinish(evt.tower_health); }
   if (typeof evt.seq === "number") hud.setSeq(evt.seq);

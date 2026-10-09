@@ -6,7 +6,7 @@ import './env.js';
 
 import http from 'node:http';
 import express from 'express';
-import { handleEvents } from './ingest.js';
+import { handleEvents, checkSiegeComplete } from './ingest.js';
 import { registerRoutes, getActiveRun } from './triggers.js';
 import { attachWss, broadcast } from './ws.js';
 import { getStats, shutdownClickHouse } from './clickhouse.js';
@@ -46,6 +46,9 @@ const statsTimer = setInterval(async () => {
   }
 }, 1000);
 
+// siege-complete checker — when events stop arriving, signal the results page.
+const idleTimer = setInterval(() => { try { checkSiegeComplete(); } catch { /* noop */ } }, 2000);
+
 server.listen(PORT, () => {
   console.log('='.repeat(56));
   console.log(`  GHOST Coordinator`);
@@ -61,6 +64,7 @@ server.listen(PORT, () => {
 async function shutdown(sig) {
   console.log(`\n[server] ${sig} — shutting down`);
   clearInterval(statsTimer);
+  clearInterval(idleTimer);
   await shutdownClickHouse().catch(() => {});
   await shutdownPostgres().catch(() => {});
   server.close(() => process.exit(0));

@@ -7,9 +7,42 @@ import { detect, detectMock } from './detect.js';
 import { insertEvent } from './clickhouse.js';
 import { broadcast, rememberEvent } from './ws.js';
 
+// ── siege-complete detection ────────────────────────────────────────────────
+// The coordinator sees every event, so it's the authority on when a run is over:
+// after real events stop arriving for IDLE_MS, broadcast one "siege complete"
+// marker so the frontend can roll to the results page (works for any source —
+// guild, real LLM, semgrep, mock-loop — regardless of whether the tower fell).
+const IDLE_MS = 7000;
+const MIN_EVENTS = 3;
+let lastEventAt = 0;
+let lastRun = null;
+let eventsThisRun = 0;
+let completeSignaled = false;
+
+export function checkSiegeComplete() {
+  if (!lastRun || completeSignaled || eventsThisRun < MIN_EVENTS) return;
+  if (Date.now() - lastEventAt < IDLE_MS) return;
+  completeSignaled = true;
+  broadcast({
+    kind: 'event', run_id: lastRun, event_type: 'target_health',
+    target_component: 'tower', description: 'siege complete',
+    ts: new Date().toISOString(),
+  });
+  console.log(`[ingest] siege complete for ${lastRun} (${eventsThisRun} events) — results signal sent`);
+}
+
+function trackActivity(event) {
+  if (event.event_type === 'target_health') return; // markers/heartbeats don't count
+  if (event.run_id !== lastRun) { lastRun = event.run_id; eventsThisRun = 0; completeSignaled = false; }
+  lastEventAt = Date.now();
+  eventsThisRun += 1;
+  completeSignaled = false;
+}
+
 // Process one validated agent event end to end.
 // Returns the enriched event (also broadcast + persisted as a side effect).
 export function ingestEvent(event) {
+  trackActivity(event);
   const run_id = event.run_id;
   const mode = getMode(run_id);
   const seq = nextSeq(run_id);

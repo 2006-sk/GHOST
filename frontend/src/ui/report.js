@@ -288,6 +288,9 @@ export function createReport({ onRelaunch } = {}) {
   let openProfileId = null; // which agent card is open (for live decision-log refresh)
   const FLOOR_MS = 28000;  // never show results before this (keeps the siege on screen)
   const CEIL_MS = 78000;   // safety: show by here even if the run-end signal is missed
+  const IDLE_MS = 7000;    // no new events for this long = the siege is over → results
+  const MIN_RUN_MS = 10000; // but keep the siege on screen at least this long first
+  let idleTimer = null;
 
   const dock = document.getElementById("agent-dock");
   const modal = document.getElementById("profile-modal");
@@ -310,6 +313,11 @@ export function createReport({ onRelaunch } = {}) {
       // live log: if this agent's card is open, refresh it as decisions stream in
       if (openProfileId === id && modal && !modal.hidden) renderProfile(id);
     }
+    // idle auto-finish: the siege "ends" when events stop arriving. Reset a timer
+    // on every event; if it fires (no events for IDLE_MS) and we have findings,
+    // show the results page — even if the tower held (health never hit 0).
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(idleFinish, IDLE_MS);
     if (evt.event_type === "weakness_found") {
       const key = `${evt.target_component}|${evt.description}`;
       if (!findings.some((f) => f.key === key)) {
@@ -335,6 +343,13 @@ export function createReport({ onRelaunch } = {}) {
   // ceilinged as a safety net. Keeps the demo ~1 minute, never a blink.
   function maybeFinish(health) { if (typeof health === "number") lastHealth = health; if (health <= 0) { healthZero = true; tryShow(); } }
   function noteRunEnded() { runEnded = true; tryShow(); }
+  // the siege stopped streaming → show results (defense may have held)
+  function idleFinish() {
+    if (shown || finishScheduled) return;
+    const elapsed = startTs ? Date.now() - startTs : 0;
+    if (findings.length < 2 || elapsed < MIN_RUN_MS) return;
+    finishScheduled = true; shown = true; renderResults();
+  }
   function tryShow() {
     if (shown || finishScheduled || !healthZero) return;
     const elapsed = startTs ? Date.now() - startTs : 0;
@@ -510,6 +525,7 @@ export function createReport({ onRelaunch } = {}) {
   function reset() {
     AGENTS.forEach((a) => { chains[a.id] = []; updateChip(a.id); });
     findings.length = 0;
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
     shown = false; finishScheduled = false; startTs = 0; healthZero = false; runEnded = false; lastHealth = 100;
   }
 

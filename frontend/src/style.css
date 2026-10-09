@@ -210,12 +210,18 @@ html, body {
 /* compact by default: description hidden until the row is clicked */
 .wk .wk-desc { font-size: 12px; margin-top: 0; line-height: 1.35; max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.25s ease, opacity 0.2s, margin-top 0.2s; }
 .wk.open .wk-desc { max-height: 320px; opacity: 1; margin-top: 5px; }
-/* severity weight via left-border brightness + thickness */
-.wk.sev-low     { border-left-color: var(--w-faint); }
-.wk.sev-medium  { border-left-color: var(--w-dim); }
-.wk.sev-high    { border-left-color: var(--w); }
-.wk.sev-critical{ border-left-color: var(--w); border-left-width: 5px; box-shadow: 0 0 22px rgba(255,255,255,0.25) inset; }
-.wk.sev-critical .wk-sev { letter-spacing: 0.24em; }
+/* severity color-coding: left border + severity label tinted by severity */
+.wk.sev-info     { border-left-color: var(--w-faint); }
+.wk.sev-info     .wk-sev { color: var(--w-dim); }
+.wk.sev-low      { border-left-color: #6fb0ff; }
+.wk.sev-low      .wk-sev { color: #6fb0ff; }
+.wk.sev-medium   { border-left-color: #ffe14d; }
+.wk.sev-medium   .wk-sev { color: #ffe14d; }
+.wk.sev-high     { border-left-color: #ff9d3c; }
+.wk.sev-high     .wk-sev { color: #ff9d3c; }
+.wk.sev-critical { border-left-color: #ff2d55; border-left-width: 5px; box-shadow: 0 0 20px rgba(255,45,85,0.28) inset; }
+.wk.sev-critical .wk-sev { color: #ff2d55; letter-spacing: 0.24em; }
+.wk.sev-critical .wk-desc { color: #ffb3c0; }
 
 /* Help */
 #hud-help {
