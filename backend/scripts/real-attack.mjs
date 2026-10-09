@@ -118,8 +118,12 @@ async function execAttack(plan) {
   } catch (e) { return { status: 0, bodyText: `request failed: ${e.message}` }; }
 }
 
-async function runPersona(a) {
-  // 1) LLM plans the attacks
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// BUILD a persona's events (plan via cached LLM → real HTTP → cached verdict).
+// Returns an ordered list of event objects WITHOUT emitting them, so a caller
+// can emit immediately or paced. Each entry: {ev, log}.
+async function buildPersona(a) {
   const planText = await llm([
     { role: 'system', content: 'You are an authorized penetration-testing planner for a deliberately-vulnerable lab bank (localhost). Output ONLY a JSON array, no prose.' },
     { role: 'user', content:
@@ -132,13 +136,12 @@ async function runPersona(a) {
   let plans = parseJsonArray(planText).slice(0, MAX);
   if (!plans.length) plans = [{ path: '/api/health', method: 'GET', technique: 'probe', intent: 'liveness' }];
 
+  const out = [];
   for (const plan of plans) {
-    await emit({ run_id: RUN_ID, event_type: 'attack_started', agent_id: a.id, agent_persona: a.persona,
-      target_component: plan.path, description: `${a.persona}: ${plan.technique || 'probe'} on ${plan.path}`, ts: nowIso() });
+    out.push({ ev: { event_type: 'attack_started', agent_id: a.id, agent_persona: a.persona,
+      target_component: plan.path, description: `${a.persona}: ${plan.technique || 'probe'} on ${plan.path}` } });
 
     const resp = await execAttack(plan);
-
-    // 2) LLM judges the real response
     const verdictText = await llm([
       { role: 'system', content: 'You are a security judge. Given an attack and the REAL server response, decide if a vulnerability was confirmed. Output ONLY JSON.' },
       { role: 'user', content:
@@ -149,28 +152,48 @@ async function runPersona(a) {
     let v = {};
     try { v = JSON.parse((verdictText.match(/\{[\s\S]*\}/) || ['{}'])[0]); } catch { v = {}; }
 
-    const base = { run_id: RUN_ID, agent_id: a.id, agent_persona: a.persona, target_component: plan.path,
+    const base = { agent_id: a.id, agent_persona: a.persona, target_component: plan.path,
       payload: typeof plan.body === 'object' ? JSON.stringify(plan.body) : (plan.body || plan.path),
-      http_status: resp.status, evidence: resp.bodyText.slice(0, 180), src_ip: '127.0.0.1', ts: nowIso() };
+      http_status: resp.status, evidence: resp.bodyText.slice(0, 180), src_ip: '127.0.0.1' };
 
     if (v.weakness) {
-      await emit({ ...base, event_type: 'weakness_found', severity: v.severity || 'medium',
-        description: v.description || `${plan.technique} succeeded on ${plan.path}` });
-      console.error(`  [${a.persona}] ✔ ${String(v.severity||'medium').toUpperCase()} ${plan.path} — ${v.description||plan.technique}`);
+      out.push({ ev: { ...base, event_type: 'weakness_found', severity: v.severity || 'medium',
+        description: v.description || `${plan.technique} succeeded on ${plan.path}` },
+        log: `  [${a.persona}] ✔ ${String(v.severity||'medium').toUpperCase()} ${plan.path}` });
     } else {
-      await emit({ ...base, event_type: 'attack_result', severity: 'info',
-        description: v.description || `${plan.technique} held on ${plan.path}` });
-      console.error(`  [${a.persona}] ✕ held ${plan.path}`);
+      out.push({ ev: { ...base, event_type: 'attack_result', severity: 'info',
+        description: v.description || `${plan.technique} held on ${plan.path}` },
+        log: `  [${a.persona}] ✕ held ${plan.path}` });
     }
   }
+  return out;
+}
+
+// interleave per-persona lists round-robin so agents look concurrent on screen
+function interleave(lists) {
+  const out = []; const max = Math.max(0, ...lists.map((l) => l.length));
+  for (let i = 0; i < max; i++) for (const l of lists) if (i < l.length) out.push(l[i]);
+  return out;
 }
 
 async function main() {
-  console.error(`REAL attack · model=${MODEL} · target=${TARGET} · run=${RUN_ID}`);
-  // recon first (seeds the narrative), then the rest in parallel
-  const recon = AGENTS[0];
-  await runPersona(recon);
-  await Promise.all(AGENTS.slice(1).map(runPersona));
-  console.error(`done. run_id=${RUN_ID} · cache ${USE_CACHE ? `on (hits=${cacheHits}, miss=${cacheMiss})` : 'off'}`);
+  const DEMO_MS = Number(process.env.DEMO_DURATION_MS || 0); // >0 → stretch the replay over this long
+  console.error(`${DEMO_MS ? 'DEMO' : 'REAL'} attack · model=${MODEL} · target=${TARGET} · run=${RUN_ID}${DEMO_MS ? ` · paced ${Math.round(DEMO_MS/1000)}s` : ''}`);
+
+  // BUILD everything first (cached LLM + real HTTP → fast). recon leads.
+  const reconEvents = await buildPersona(AGENTS[0]);
+  const rest = await Promise.all(AGENTS.slice(1).map(buildPersona));
+  const ordered = [reconEvents, ...rest];               // recon first
+  const items = [...reconEvents, ...interleave(rest)];   // recon, then others interleaved
+  void ordered;
+
+  // EMIT — paced over DEMO_MS if set, else as fast as possible.
+  const gap = DEMO_MS && items.length ? Math.floor(DEMO_MS / items.length) : 0;
+  for (const it of items) {
+    await emit({ run_id: RUN_ID, ts: nowIso(), ...it.ev }); // ts = now, so it reads live
+    if (it.log) console.error(it.log);
+    if (gap) await sleep(gap);
+  }
+  console.error(`done. run_id=${RUN_ID} · ${items.length} events · cache ${USE_CACHE ? `on (hits=${cacheHits}, miss=${cacheMiss})` : 'off'}${gap ? ` · ~${Math.round((gap*items.length)/1000)}s` : ''}`);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

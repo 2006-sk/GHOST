@@ -9,7 +9,8 @@
     "dev": "node --watch src/server.js",
     "seed": "bash scripts/seed-run.sh",
     "real-attack": "node scripts/real-attack.mjs",
-    "semgrep-agent": "node scripts/semgrep-agent.mjs"
+    "semgrep-agent": "node scripts/semgrep-agent.mjs",
+    "demo": "DEMO_DURATION_MS=60000 MAX_PER_AGENT=2 node scripts/real-attack.mjs"
   },
   "engines": {
     "node": ">=18"
