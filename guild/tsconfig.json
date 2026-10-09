@@ -1,0 +1,25 @@
+{
+  "comment": "Default typecheck: the SDK-free core (base, mock-run, schema, playbooks, orchestration). The six agent entrypoints import @guildai/agents-sdk and are checked separately via tsconfig.agents.json once the SDK is installed.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["agents", "schema", "playbooks", "orchestration"],
+  "exclude": [
+    "node_modules",
+    "agents/recon.ts",
+    "agents/netscan.ts",
+    "agents/injection.ts",
+    "agents/auth_bypass.ts",
+    "agents/dos.ts",
+    "agents/logic_abuse.ts"
+  ]
+}
