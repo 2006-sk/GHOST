@@ -11,12 +11,14 @@
   --line: rgba(255, 255, 255, 0.16);
   --bg: #000000;
   --mono: "SFMono-Regular", "JetBrains Mono", "Menlo", ui-monospace, monospace;
-  /* Defensive accents. Cool = intercepted/shield held, warm = missed/damage.
-     Always paired with a ✓/✗ glyph + label — never color alone. */
-  --ok: #6fd3ff;
-  --ok-dim: rgba(111, 211, 255, 0.55);
-  --miss: #ff7a6d;
-  --miss-dim: rgba(255, 122, 109, 0.55);
+  /* Defensive states, monochrome (sunhacks look): no hue — the verdict reads
+     through a ✓/✗ glyph + brightness + weight + motion, never color.
+     "ok" (intercepted/shield held) reads calm = dim white.
+     "miss" (breach/damage) reads loud = full white + heavier weight. */
+  --ok: var(--w-dim);
+  --ok-dim: var(--w-faint);
+  --miss: var(--w);
+  --miss-dim: var(--w-dim);
 }
 
 * { box-sizing: border-box; }
@@ -285,7 +287,7 @@ html, body {
 .wk.missed { border-left-color: var(--miss); border-left-width: 4px; }
 .wk.missed .wk-verdict { color: var(--miss); }
 .wk.missed .wk-sev { color: var(--miss); }
-.wk.missed.sev-critical { box-shadow: 0 0 22px rgba(255,122,109,0.25) inset; }
+.wk.missed.sev-critical { box-shadow: 0 0 22px rgba(255,255,255,0.3) inset; }
 
-/* a caught critical gets a cool glow instead of the white one */
-.wk.blocked.sev-critical { box-shadow: 0 0 22px rgba(111,211,255,0.3) inset; border-left-color: var(--ok); }
+/* a caught critical: a soft inset glow, dimmer border (reads calm vs a breach) */
+.wk.blocked.sev-critical { box-shadow: 0 0 18px rgba(255,255,255,0.18) inset; border-left-color: var(--ok); }

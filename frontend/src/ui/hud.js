@@ -183,12 +183,13 @@ export function createHud() {
     const total = Math.max(1, detected + missed);
     const cov = Math.round((detected / total) * 100);
 
-    // one horizontal stacked bar: BLOCKED (cool) vs MISSED (warm)
+    // one horizontal stacked bar, monochrome (sunhacks): BLOCKED reads bright,
+    // MISSED reads faint — share distinction via brightness, not hue.
     const barY = 18, barH = 26, pad = 8, bw = w - pad * 2;
     const dW = (detected / total) * bw;
-    bctx.fillStyle = "rgba(111,211,255,0.85)";          // cool = blocked
+    bctx.fillStyle = "rgba(255,255,255,0.85)";          // bright = blocked
     bctx.fillRect(pad, barY, dW, barH);
-    bctx.fillStyle = "rgba(255,122,109,0.80)";          // warm = missed
+    bctx.fillStyle = "rgba(255,255,255,0.22)";          // faint = missed
     bctx.fillRect(pad + dW, barY, bw - dW, barH);
     bctx.strokeStyle = "rgba(255,255,255,0.25)";
     bctx.strokeRect(pad + 0.5, barY + 0.5, bw, barH);

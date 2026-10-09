@@ -110,7 +110,7 @@ export function createEffects(scene) {
   // An inward-COLLAPSING cool ring + a short bright flare at the surface.
   // Deliberately the inverse of shockwave() (which expands outward = damage),
   // so "blocked" and "got through" read differently at a glance.
-  const SHIELD = 0x6fd3ff;
+  const SHIELD = 0xffffff; // monochrome; "blocked" reads via the inward collapse
   function shieldHit(point, severity = "medium") {
     const sev = SEVERITY[severity] || SEVERITY.medium;
     const startR = 4 + sev.rank * 2.4;

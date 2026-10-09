@@ -22,7 +22,8 @@ export function createTower(scene, preset = "tower") {
   // ── Defensive shield ──
   // A faint wireframe dome around the tower. Idles near-invisible; brightens and
   // ripples outward from the impact point when a hit is INTERCEPTED (detected).
-  const SHIELD = 0x6fd3ff; // cool cyan — reads as "defense", distinct from damage
+  const SHIELD = 0xffffff; // monochrome (sunhacks look); reads as "defense" via
+                           // an inward shield ripple, distinct from outward damage
   const shieldMat = new THREE.MeshBasicMaterial({
     color: SHIELD, transparent: true, opacity: 0.0, wireframe: true,
     side: THREE.DoubleSide, depthWrite: false,
