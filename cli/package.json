@@ -1,0 +1,20 @@
+{
+  "name": "ghost-cli",
+  "version": "1.0.0",
+  "description": "ghost — terminal launcher for a GHOST siege. cd into a repo, `ghost run`, watch your defenses hold live.",
+  "type": "module",
+  "bin": {
+    "ghost": "./bin/ghost.js"
+  },
+  "scripts": {
+    "start": "node bin/ghost.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "open": "^10.1.0",
+    "picocolors": "^1.1.0",
+    "ws": "^8.18.0"
+  }
+}
