@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "seed": "bash scripts/seed-run.sh"
+    "seed": "bash scripts/seed-run.sh",
+    "real-attack": "node scripts/real-attack.mjs",
+    "semgrep-agent": "node scripts/semgrep-agent.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -9,6 +9,9 @@ export const AGENTS = {
   'agent-4': { persona: 'auth_bypass', hud: 'IDOR/JWT' },
   'agent-5': { persona: 'dos', hud: 'FLOOD' },
   'agent-6': { persona: 'logic_abuse', hud: 'BIZ-LOGIC' },
+  // agent-7: SEMGREP — the static-analysis agent. It reads the target's source
+  // (not the running app) and emits its findings as weaknesses into the siege.
+  'agent-7': { persona: 'semgrep', hud: 'STATIC/SAST' },
 };
 
 export const PERSONAS = Object.values(AGENTS).map((a) => a.persona);

@@ -12,6 +12,7 @@ const RULES = {
   netscan: (e) => 'port_scan_signature',
   recon: (e) => 'crawl_anomaly',
   logic_abuse: (e) => 'biz_logic_rule',
+  semgrep: (e) => e.rule || 'sast_rule', // static findings carry their own rule id
 };
 
 function matchInjection(e) {

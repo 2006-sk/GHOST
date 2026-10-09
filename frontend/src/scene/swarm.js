@@ -43,7 +43,7 @@ class Jet {
     this.onImpact = onImpact;
 
     // Distinct orbit per agent → different sides of the tower.
-    const spreadIncl = [-1.0, -0.6, -0.2, 0.3, 0.7, 1.1][index] || 0; // radians tilt (6 agents)
+    const spreadIncl = [-1.1, -0.72, -0.36, 0.0, 0.36, 0.72, 1.1][index] || 0; // radians tilt (7 agents)
     this.orbit = {
       radius: 20 + index * 1.8,
       incl: spreadIncl,

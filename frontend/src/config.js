@@ -36,6 +36,7 @@ export const AGENTS = [
   { id: "agent-4", persona: "auth_bypass", label: "AUTH-BYPASS", tag: "IDOR/JWT",        color: 0x3dffd6, hex: "#3dffd6", brain: "GLM-5.3-Flash",          blurb: "Reaches what it shouldn't: IDOR, missing authorization, forged tokens (alg:none), and info disclosure." },
   { id: "agent-5", persona: "dos",         label: "DoS",         tag: "FLOOD",           color: 0x3db4ff, hex: "#3db4ff", brain: "Nemotron-3-Ultra",       blurb: "Tests resource handling and missing rate limits with bounded, non-destructive bursts." },
   { id: "agent-6", persona: "logic_abuse", label: "LOGIC-ABUSE", tag: "BIZ-LOGIC",       color: 0x5b6bff, hex: "#5b6bff", brain: "Nemotron-3-Ultra",       blurb: "Breaks business-logic assumptions: coupon stacking, negative amounts, and transfer theft." },
+  { id: "agent-7", persona: "semgrep",     label: "SEMGREP",     tag: "STATIC/SAST",     color: 0xc77dff, hex: "#c77dff", brain: "Semgrep OSS",            blurb: "Static analysis: reads the target's source code (not the running app) and reports the vulnerabilities it finds, with the exact file and line." },
 ];
 
 export const AGENT_BY_ID = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
