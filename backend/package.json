@@ -10,7 +10,8 @@
     "seed": "bash scripts/seed-run.sh",
     "real-attack": "node scripts/real-attack.mjs",
     "semgrep-agent": "node scripts/semgrep-agent.mjs",
-    "demo": "DEMO_DURATION_MS=30000 MAX_PER_AGENT=2 node scripts/real-attack.mjs"
+    "demo": "DEMO_DURATION_MS=30000 MAX_PER_AGENT=2 node scripts/real-attack.mjs",
+    "guild-live": "bash scripts/guild-live.sh"
   },
   "engines": {
     "node": ">=18"
