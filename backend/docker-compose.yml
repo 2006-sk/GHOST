@@ -1,0 +1,24 @@
+# Local ClickHouse for the coordinator. Aditya applies schema.sql + runs the
+# replayer to preload >=1M rows. Coordinator talks to it over the HTTP interface
+# on :8123. Leave CLICKHOUSE_URL unset to run the coordinator fully in-memory.
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: ghost-clickhouse
+    ports:
+      - "8123:8123" # HTTP interface (coordinator inserts + stats)
+      - "9000:9000" # native
+    environment:
+      CLICKHOUSE_DB: ghost
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - ghost_ch_data:/var/lib/clickhouse
+
+volumes:
+  ghost_ch_data:

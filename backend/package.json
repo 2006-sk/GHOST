@@ -1,0 +1,19 @@
+{
+  "name": "ghost-coordinator",
+  "version": "1.0.0",
+  "description": "GHOST Coordinator — ingests red-team agent events, owns seq + tower_health + detection verdict, writes ClickHouse, broadcasts WS to the siege frontend.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "bash scripts/seed-run.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
