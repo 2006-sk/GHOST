@@ -127,12 +127,15 @@ function statsFromTally(run_id) {
 
 async function statsFromClickHouse(run_id) {
   // Aditya owns the exact stats.sql; this is the HTTP shape we expect.
+  // NOTE: do not alias a column with countIf(detected) AS detected — the alias
+  // shadows the `detected` column and breaks avgIf(..., detected). Use distinct
+  // alias names and reference the column directly inside the If-aggregates.
   const sql = `
     SELECT
       count() AS total_events,
-      countIf(detected) AS detected,
+      countIf(detected) AS detected_n,
       countIf(NOT detected) AS missed,
-      round(100 * detected / total_events, 1) AS coverage_pct,
+      round(100 * countIf(detected) / count(), 1) AS coverage_pct,
       round(avgIf(detect_latency_ms, detected), 1) AS mttd_ms
     FROM ${CH_DB}.events
     WHERE run_id = {run:String}
@@ -160,7 +163,7 @@ async function statsFromClickHouse(run_id) {
       coverage_pct: Number(row.coverage_pct) || 0,
       mttd_ms: Number(row.mttd_ms) || 0,
       total_events: Number(row.total_events) || 0,
-      detected: Number(row.detected) || 0,
+      detected: Number(row.detected_n) || 0,
       missed: Number(row.missed) || 0,
       by_persona: local.by_persona,
       by_severity: local.by_severity,

@@ -1,5 +1,9 @@
 // server.js — express + ws bootstrap. The one service everything plugs into.
 
+// MUST be first: loads backend/.env before any other module reads process.env
+// (ESM evaluates imports before top-level code, so this import runs first).
+import './env.js';
+
 import http from 'node:http';
 import express from 'express';
 import { handleEvents } from './ingest.js';
