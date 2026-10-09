@@ -11,14 +11,6 @@
   --line: rgba(255, 255, 255, 0.16);
   --bg: #000000;
   --mono: "SFMono-Regular", "JetBrains Mono", "Menlo", ui-monospace, monospace;
-  /* Defensive states, monochrome (sunhacks look): no hue — the verdict reads
-     through a ✓/✗ glyph + brightness + weight + motion, never color.
-     "ok" (intercepted/shield held) reads calm = dim white.
-     "miss" (breach/damage) reads loud = full white + heavier weight. */
-  --ok: var(--w-dim);
-  --ok-dim: var(--w-faint);
-  --miss: var(--w);
-  --miss-dim: var(--w-dim);
 }
 
 * { box-sizing: border-box; }
@@ -245,49 +237,3 @@ html, body {
   #hud-stats { position: static; justify-content: flex-start; margin-top: 10px; }
   #charts { flex-wrap: wrap; }
 }
-
-/* ═══════════════ Defensive reskin ═══════════════ */
-
-/* Subtitle now carries target + run id */
-#brand .subtitle { display: flex; gap: 14px; align-items: baseline; }
-#brand .subtitle .run { color: var(--w-faint); letter-spacing: 0.14em; }
-
-/* Flash tint: cool for an intercepted critical, warm for a breach */
-#flash[data-tint="ok"]   { background: var(--ok); }
-#flash[data-tint="miss"] { background: var(--miss); }
-
-/* Coverage tile reads cool (it's the defense winning) */
-.stat.accent-ok .stat-value { color: var(--ok); text-shadow: 0 0 18px var(--ok-dim); }
-.stat.accent-ok .unit { color: var(--ok-dim); }
-
-/* Integrity bar warms as it drops */
-#health-fill.low { background: var(--miss); box-shadow: 0 0 12px var(--miss-dim); }
-
-/* Roster state coloring (glyph + word, color is reinforcement only) */
-.agent-row .a-state[data-k="attacking"] { color: var(--w); }
-.agent-row .a-state[data-k="blocked"]   { color: var(--ok); }
-.agent-row .a-state[data-k="breach"]    { color: var(--miss); font-weight: 700; }
-.agent-row .a-state[data-k="held"]      { color: var(--w-dim); }
-.agent-row .a-state[data-k="blocked"]::before { content: "✓ "; }
-.agent-row .a-state[data-k="breach"]::before   { content: "✗ "; }
-
-/* Detection feed: source + severity header, verdict line below */
-.wk .wk-src { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
-.wk .wk-verdict { font-size: 11px; margin-top: 5px; letter-spacing: 0.1em; font-weight: 700; }
-
-.wk.pending { opacity: 0.88; border-left-color: var(--w-dim); }
-.wk.pending .wk-verdict { color: var(--w-dim); font-weight: 400; }
-.wk.pending .wk-verdict::after { content: ""; animation: dots 1s steps(4) infinite; }
-@keyframes dots { 0%{content:"";} 25%{content:".";} 50%{content:"..";} 75%{content:"...";} }
-
-.wk.blocked { border-left-color: var(--ok); }
-.wk.blocked .wk-verdict { color: var(--ok); }
-.wk.blocked .wk-sev { color: var(--ok); }
-
-.wk.missed { border-left-color: var(--miss); border-left-width: 4px; }
-.wk.missed .wk-verdict { color: var(--miss); }
-.wk.missed .wk-sev { color: var(--miss); }
-.wk.missed.sev-critical { box-shadow: 0 0 22px rgba(255,255,255,0.3) inset; }
-
-/* a caught critical: a soft inset glow, dimmer border (reads calm vs a breach) */
-.wk.blocked.sev-critical { box-shadow: 0 0 18px rgba(255,255,255,0.18) inset; border-left-color: var(--ok); }

@@ -1,13 +1,6 @@
 // ── HUD ─────────────────────────────────────────────────────────────────
-// Defensive command center. Monochrome base with two restrained accents:
-//   cool  = INTERCEPTED / shield held   warm = MISSED / damage got through.
-// Accents never carry meaning alone — every verdict also shows a ✓ / ✗ glyph
-// and a text label, so the HUD still reads with color vision differences.
-//
-// Fed by the Coordinator's four message kinds:
-//   event      → a detection-feed row appears (pending), roster goes ATTACKING
-//   detection  → that row resolves to ✓ BLOCKED (rule · Xms) or ✗ MISSED
-//   stats      → COVERAGE % + DETECTION LATENCY tiles + DETECTED vs MISSED chart
+// All monochrome DOM + two small canvas charts. Fed by the same event stream
+// as the 3D scene. Severity reads through weight/brightness, never color.
 
 import { AGENTS, SEVERITY, PERSONA_LABEL } from "../config.js";
 
@@ -16,21 +9,19 @@ export function createHud() {
   const el = {
     conn: $("conn"), connText: $("conn-text"),
     health: $("health-num"), healthFill: $("health-fill"),
-    coverage: $("coverage-num"), latency: $("latency-num"),
-    seq: $("seq-num"),
-    target: $("target-name"), run: $("run-id"),
+    weak: $("weak-num"), seq: $("seq-num"),
+    target: $("target-name"),
     rosterList: $("roster-list"),
     bannerList: $("banner-list"),
-    bannerLabel: $("banner-label"),
     chartHealth: $("chart-health"), chartBreak: $("chart-breakdown"),
     hud: $("hud"),
   };
 
-  // ── roster rows ──
+  // Build roster rows
   const rows = {};
-  const blockedByAgent = {};
+  const weakByAgent = {};
   for (const a of AGENTS) {
-    blockedByAgent[a.id] = 0;
+    weakByAgent[a.id] = 0;
     const li = document.createElement("li");
     li.className = "agent-row";
     li.innerHTML = `
@@ -42,21 +33,16 @@ export function createHud() {
   }
 
   const healthHistory = [100];
-  // seq → feed row element (so a detection can resolve its pending row)
-  const feedRows = new Map();
-  // live detected/missed tally — a fallback until `stats` messages arrive
-  let tally = { detected: 0, missed: 0 };
-  let stats = null; // last `stats` message (authoritative when present)
+  const breakdown = Object.fromEntries(AGENTS.map((a) => [a.persona, 0]));
+  let weakTotal = 0;
 
-  // ── connection / mode badge ──
   function setConnection(status) {
     const map = {
       connecting: ["conn-down", "CONNECTING"],
-      defending:  ["conn-live", "● DEFENDING"],
-      live:       ["conn-live", "● DEFENDING · LIVE"],
-      mock:       ["conn-live", "● DEFENDING · MOCK"],
-      sim:        ["conn-live", "● SIM / REHEARSAL"],
-      down:       ["conn-down", "RECONNECTING…"],
+      live: ["conn-live", "● LIVE FEED"],
+      mock: ["conn-live", "● MOCK FEED"],
+      sim: ["conn-live", "● SIM / REHEARSAL"],
+      down: ["conn-down", "RECONNECTING…"],
     };
     const [cls, text] = map[status] || map.down;
     el.conn.className = "conn " + cls;
@@ -64,13 +50,12 @@ export function createHud() {
   }
 
   function setTarget(name) { el.target.textContent = name; }
-  function setRun(id) { if (el.run) el.run.textContent = id || "—"; }
 
+  function resetHealth() { healthHistory.length = 0; healthHistory.push(100); }
   function setHealth(h) {
     h = Math.max(0, Math.min(100, Math.round(h)));
     el.health.textContent = h;
     el.healthFill.style.width = h + "%";
-    el.healthFill.classList.toggle("low", h < 35);
     healthHistory.push(h);
     if (healthHistory.length > 160) healthHistory.shift();
   }
@@ -83,76 +68,55 @@ export function createHud() {
 
   function setSeq(n) { if (typeof n === "number") el.seq.textContent = n; }
 
-  // COVERAGE % + DETECTION LATENCY + DETECTED/MISSED chart, straight from ClickHouse.
-  function setStats(msg) {
-    if (!msg) return;
-    stats = msg;
-    if (typeof msg.coverage_pct === "number") el.coverage.textContent = msg.coverage_pct.toFixed(1);
-    if (typeof msg.mttd_ms === "number") el.latency.textContent = msg.mttd_ms.toFixed(1);
-  }
-
-  // ── roster ──
   function updateAgent(id, stateLabel, target) {
     const li = rows[id];
     if (!li) return;
-    const stateEl = li.querySelector("[data-state]");
-    stateEl.textContent = stateLabel;
-    stateEl.dataset.k = stateLabel.toLowerCase();
+    li.querySelector("[data-state]").textContent = stateLabel;
     if (target) li.querySelector("[data-target]").textContent = target;
-    li.classList.toggle("active", stateLabel !== "IDLE");
-    if (stateLabel === "BLOCKED") {
-      blockedByAgent[id] = (blockedByAgent[id] || 0) + 1;
-      const c = li.querySelector("[data-count]");
-      if (c) c.textContent = "·" + blockedByAgent[id];
-    }
+    const active = stateLabel !== "IDLE";
+    li.classList.toggle("active", active);
   }
 
-  // ── detection feed ──
-  // A weakness_found arrives → create a pending row. Its matching detection
-  // resolves it to BLOCKED or MISSED (matched by seq).
-  function pushDetectionPending(evt) {
+  function countWeakness(evt) {
+    weakTotal++;
+    el.weak.textContent = weakTotal;
+    if (evt.agent_id && weakByAgent[evt.agent_id] != null) {
+      weakByAgent[evt.agent_id]++;
+      const c = rows[evt.agent_id]?.querySelector("[data-count]");
+      if (c) c.textContent = "·" + weakByAgent[evt.agent_id];
+    }
+    if (evt.agent_persona && breakdown[evt.agent_persona] != null) breakdown[evt.agent_persona]++;
+  }
+
+  function pushWeakness(evt) {
+    countWeakness(evt);
     const sev = SEVERITY[evt.severity] || SEVERITY.info;
     const li = document.createElement("li");
-    li.className = `wk enter sev-${evt.severity} pending`;
+    li.className = `wk enter sev-${evt.severity}`;
     li.innerHTML = `
       <div class="wk-head">
-        <span class="wk-src">${PERSONA_LABEL[evt.agent_persona] || evt.agent_id || "AGENT"} · ${escapeHtml(evt.target_component || "")}</span>
+        <span>${PERSONA_LABEL[evt.agent_persona] || evt.agent_id || "AGENT"} · ${escapeHtml(evt.target_component || "")}</span>
         <span class="wk-sev">${sev.label}</span>
       </div>
-      <div class="wk-verdict" data-verdict>▸ SCANNING…</div>`;
+      <div class="wk-desc">${escapeHtml(evt.description || "")}</div>`;
     el.bannerList.prepend(li);
-    if (typeof evt.seq === "number") feedRows.set(evt.seq, li);
-    while (el.bannerList.children.length > 7) {
-      const gone = el.bannerList.lastChild;
-      for (const [k, v] of feedRows) if (v === gone) feedRows.delete(k);
-      gone.remove();
-    }
+    while (el.bannerList.children.length > 6) el.bannerList.lastChild.remove();
     setTimeout(() => li.classList.remove("enter"), 600);
-  }
-
-  function resolveDetection(seq, msg) {
-    if (msg.detected) tally.detected++; else tally.missed++;
-    const li = feedRows.get(seq);
-    if (!li) return;
-    li.classList.remove("pending");
-    li.classList.add(msg.detected ? "blocked" : "missed");
-    const v = li.querySelector("[data-verdict]");
-    if (v) {
-      v.textContent = msg.detected
-        ? `✓ BLOCKED · ${msg.rule || "rule"} · ${msg.latency_ms ?? "?"}ms`
-        : `✗ MISSED · damage dealt`;
-    }
   }
 
   // ── charts ──
   const hctx = el.chartHealth.getContext("2d");
   const bctx = el.chartBreak.getContext("2d");
 
-  function drawCharts() { drawHealth(); drawDetectedMissed(); }
+  function drawCharts() {
+    drawHealth();
+    drawBreakdown();
+  }
 
   function drawHealth() {
     const w = el.chartHealth.width, h = el.chartHealth.height;
     hctx.clearRect(0, 0, w, h);
+    // baseline grid
     hctx.strokeStyle = "rgba(255,255,255,0.12)";
     hctx.lineWidth = 1;
     hctx.beginPath(); hctx.moveTo(0, h - 1); hctx.lineTo(w, h - 1); hctx.stroke();
@@ -170,47 +134,34 @@ export function createHud() {
     hctx.shadowBlur = 6;
     hctx.stroke();
     hctx.shadowBlur = 0;
+    // fill under curve
     hctx.lineTo(w, h); hctx.lineTo(0, h); hctx.closePath();
     hctx.fillStyle = "rgba(255,255,255,0.06)";
     hctx.fill();
   }
 
-  function drawDetectedMissed() {
+  function drawBreakdown() {
     const w = el.chartBreak.width, h = el.chartBreak.height;
     bctx.clearRect(0, 0, w, h);
-    const detected = stats ? stats.detected : tally.detected;
-    const missed = stats ? stats.missed : tally.missed;
-    const total = Math.max(1, detected + missed);
-    const cov = Math.round((detected / total) * 100);
-
-    // one horizontal stacked bar, monochrome (sunhacks): BLOCKED reads bright,
-    // MISSED reads faint — share distinction via brightness, not hue.
-    const barY = 18, barH = 26, pad = 8, bw = w - pad * 2;
-    const dW = (detected / total) * bw;
-    bctx.fillStyle = "rgba(255,255,255,0.85)";          // bright = blocked
-    bctx.fillRect(pad, barY, dW, barH);
-    bctx.fillStyle = "rgba(255,255,255,0.22)";          // faint = missed
-    bctx.fillRect(pad + dW, barY, bw - dW, barH);
-    bctx.strokeStyle = "rgba(255,255,255,0.25)";
-    bctx.strokeRect(pad + 0.5, barY + 0.5, bw, barH);
-
-    bctx.font = "9px monospace";
-    bctx.textAlign = "left";
-    bctx.fillStyle = "rgba(255,255,255,0.9)";
-    bctx.fillText(`BLOCKED ${fmt(detected)}`, pad, barY - 5);
-    bctx.textAlign = "right";
-    bctx.fillText(`MISSED ${fmt(missed)}`, w - pad, barY - 5);
-
+    const keys = AGENTS.map((a) => a.persona);
+    const max = Math.max(1, ...keys.map((k) => breakdown[k]));
+    const bw = w / keys.length;
     bctx.textAlign = "center";
-    bctx.font = "11px monospace";
-    bctx.fillStyle = "#fff";
-    bctx.fillText(`${cov}% COVERAGE`, w / 2, barY + barH + 16);
-  }
-
-  function fmt(n) {
-    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
-    if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
-    return String(n);
+    bctx.font = "8px monospace";
+    keys.forEach((k, i) => {
+      const val = breakdown[k];
+      const bh = (val / max) * (h - 18);
+      const x = i * bw + 6;
+      const y = h - 12 - bh;
+      bctx.strokeStyle = "rgba(255,255,255,0.5)";
+      bctx.fillStyle = "rgba(255,255,255,0.9)";
+      bctx.fillRect(x, y, bw - 12, bh);
+      bctx.strokeRect(x + 0.5, y + 0.5, bw - 12, bh);
+      bctx.fillStyle = "rgba(255,255,255,0.55)";
+      bctx.fillText(String(val), x + (bw - 12) / 2, y - 3);
+      bctx.fillStyle = "rgba(255,255,255,0.4)";
+      bctx.fillText((AGENTS[i].label || k).slice(0, 5), x + (bw - 12) / 2, h - 2);
+    });
   }
 
   let toastTimer = null;
@@ -220,16 +171,16 @@ export function createHud() {
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 1500);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 1300);
   }
 
   function toggleHud() { el.hud.classList.toggle("hidden"); }
+
   function tick() { drawCharts(); }
 
   return {
-    setConnection, setTarget, setRun, setHealth, seedHealth, setSeq, setStats,
-    updateAgent, pushDetectionPending, resolveDetection,
-    toast, toggleHud, tick,
+    setConnection, setTarget, setHealth, seedHealth, resetHealth, setSeq,
+    updateAgent, pushWeakness, countWeakness, toast, toggleHud, tick,
   };
 }
 

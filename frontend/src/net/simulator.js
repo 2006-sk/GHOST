@@ -1,18 +1,14 @@
 // ── Client-side simulator ───────────────────────────────────────────────
-// A self-contained event source that produces the SAME four message kinds the
-// Coordinator does (event · detection · stats), so the whole defensive UI can
-// be rehearsed with zero backend. Toggle with "S"; also powers the client-side
-// money shot when no /trigger/critical endpoint is reachable.
-//
-// It mirrors the backend health + verdict rules (master.md §4.2 / §4.8):
-//   verdict decided first → detected ? no damage : apply severity delta.
-//   event carries the final tower_health; detection carries rule + latency.
+// A self-contained event source that produces the SAME wrapped events the
+// Coordinator does, so the whole visual system can be rehearsed with zero
+// backend (README watch-out: keep a seed/replay mode even after the real feed
+// is wired). Toggle with the "S" key. Also powers a client-side critical when
+// no mock trigger endpoint is reachable.
 
-import { SEVERITY, AGENTS, AGENT_OF } from "../config.js";
+import { SEVERITY, AGENTS } from "../config.js";
 
 const COMPONENTS = {
   recon:       ["/", "/api", "/login", "/admin", "/static", "robots.txt"],
-  netscan:     ["tcp/22", "tcp/5432", "tcp/6379", "tcp/9200", "debug/9229", "tcp/443"],
   injection:   ["/api/search?q=", "/api/user?id=", "/api/chat (LLM)", "/comment"],
   auth_bypass: ["/admin", "/api/user/2/settings", "/api/export", "JWT cookie"],
   dos:         ["/api/report", "/api/search", "/api/upload", "rate-limiter"],
@@ -20,140 +16,149 @@ const COMPONENTS = {
 };
 
 const RESULTS = {
-  recon:       [["mapped 6 endpoints", "info"], ["/admin unlinked but live", "low"]],
-  netscan:     [["all closed except 443", "info"], ["Postgres 5432 exposed to 0.0.0.0", "high"], ["Redis 6379 no auth", "critical"]],
-  injection:   [["reflected XSS unescaped", "medium"], ["SQLi: ' OR 1=1 -- returned all rows", "critical"], ["prompt injection leaked system prompt", "high"]],
-  auth_bypass: [["IDOR: read another user's settings", "high"], ["forged JWT alg:none accepted", "critical"]],
-  dos:         [["no rate limit on /api/search", "medium"], ["10k req/s → 502s", "high"]],
-  logic_abuse: [["coupon stacks infinitely → -100% price", "high"], ["negative quantity → credit issued", "critical"]],
+  recon:       [["mapped 6 endpoints", "info"], ["found /admin unlinked", "low"]],
+  injection:   [["reflected input unescaped", "medium"], ["SQLi: ' OR 1=1 -- returned all rows", "critical"], ["prompt injection leaked system prompt", "high"]],
+  auth_bypass: [["IDOR: read another user's settings", "high"], ["forged JWT accepted (alg:none)", "critical"]],
+  dos:         [["no rate limit on /api/search", "medium"], ["10k req/s -> 502s", "high"]],
+  logic_abuse: [["coupon stacks infinitely -> -100% price", "high"], ["negative quantity -> credit issued", "critical"]],
 };
 
-const RULE = {
-  recon: "crawl_anomaly", netscan: "port_scan_signature", injection: "sqli_signature",
-  auth_bypass: "idor_access_rule", dos: "flood_rate_limit", logic_abuse: "biz_logic_rule",
-};
-const CATCH_RATE = { info: 1.0, low: 0.85, medium: 0.9, high: 0.95, critical: 0.97 };
+
+// The REAL APEX findings, interleaved across all 5 agents — descriptions match
+// the results-page remediation lookup so the fallback reads like a real run.
+const REAL_TIMELINE = [
+  { agent: "agent-1", persona: "recon",       comp: "/robots.txt",          sev: "info",     desc: "recon: mapped surface — /admin, /api/internal/config, /api/export are staff-only" },
+  { agent: "agent-1", persona: "recon",       comp: "/admin",               sev: "medium",   desc: "recon: sensitive path reachable — /admin" },
+  { agent: "agent-2", persona: "injection",   comp: "/api/search",          sev: "critical", desc: "SQL injection: query dumped the full user table (SSNs)" },
+  { agent: "agent-3", persona: "auth_bypass", comp: "/api/user",            sev: "high",     desc: "IDOR: read another user's full record (SSN, balance) with no authorization" },
+  { agent: "agent-4", persona: "dos",         comp: "/api/export",          sev: "high",     desc: "no rate limiting: 25 concurrent reqs all accepted (and unauthenticated)" },
+  { agent: "agent-5", persona: "logic_abuse", comp: "/api/checkout",        sev: "high",     desc: "discount abuse: total dropped via stacked coupons" },
+  { agent: "agent-2", persona: "injection",   comp: "/api/login",           sev: "critical", desc: "authentication bypass via SQL-injection-shaped login" },
+  { agent: "agent-3", persona: "auth_bypass", comp: "/admin",               sev: "critical", desc: "broken access control: admin panel + secret served without real authz" },
+  { agent: "agent-4", persona: "dos",         comp: "/api/export",          sev: "high",     desc: "unauthenticated bulk export of customer PII" },
+  { agent: "agent-5", persona: "logic_abuse", comp: "/api/checkout",        sev: "critical", desc: "negative total — money flows toward the attacker" },
+  { agent: "agent-2", persona: "injection",   comp: "/api/search",          sev: "medium",   desc: "reflected XSS: user input echoed unescaped into HTML" },
+  { agent: "agent-3", persona: "auth_bypass", comp: "/api/internal/config", sev: "critical", desc: "sensitive info disclosure: internal config + secret key exposed" },
+  { agent: "agent-2", persona: "injection",   comp: "/api/assistant",       sev: "critical", desc: "prompt injection: leaked the assistant's hidden system prompt + secret flag" },
+  { agent: "agent-5", persona: "logic_abuse", comp: "/api/transfer",        sev: "critical", desc: "transfer logic abuse: negative amount reverses the flow (theft)" },
+];
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-export function createSimulator({ onEvent, onDetection, onStats }) {
+export function createSimulator(dispatch) {
   let health = 100;
   let seq = 0;
   let running = false;
   let timer = null;
   let beat = null;
-  let statsTimer = null;
 
-  // live tally for the stats message
-  const t = {
-    total: 0, detected: 0, missed: 0, latSum: 0,
-    byPersona: Object.fromEntries(AGENTS.map((a) => [a.persona, { events: 0, detected: 0 }])),
-    bySeverity: {},
-  };
-  // baseline historical volume so coverage/latency look "at scale" like ClickHouse
-  const BASE = { total: 1_250_000, detected: 1_181_000, latSum: 1_181_000 * 6.8 };
-
-  function emitEvent(partial) {
+  function emit(partial) {
     const evt = {
-      kind: "event", run_id: "run_sim_01", agent_id: null, agent_persona: null,
-      target_component: "", severity: "info", description: "", health_delta: 0,
-      ts: new Date().toISOString(), ...partial, seq: ++seq, tower_health: health,
+      kind: "event",
+      agent_id: null,
+      agent_persona: null,
+      target_component: "",
+      severity: "info",
+      description: "",
+      health_delta: 0,
+      timestamp: new Date().toISOString(),
+      ...partial,
     };
-    onEvent?.(evt);
-    return evt;
-  }
-
-  // One scored action: decide the verdict, apply health, emit event then detection.
-  function scored(persona, comp, event_type, severity, desc) {
-    const detected = Math.random() < (CATCH_RATE[severity] ?? 0.9);
-    const delta = SEVERITY[severity]?.damage || 0;
-    if (!detected && event_type === "weakness_found") {
-      health = Math.max(0, Math.min(100, Math.round(health + delta)));
+    if (evt.event_type === "weakness_found" && !evt.health_delta && typeof evt.absolute !== "number") {
+      evt.health_delta = SEVERITY[evt.severity]?.damage || 0;
     }
-    const latency_ms = 3 + Math.floor(Math.random() * 12);
-    const evt = emitEvent({
-      event_type, agent_id: AGENT_OF[persona], agent_persona: persona,
-      target_component: comp, severity, description: desc, health_delta: delta,
-    });
-    // record for stats
-    t.total++; t.bySeverity[severity] = (t.bySeverity[severity] || 0) + 1;
-    const bp = t.byPersona[persona]; if (bp) bp.events++;
-    if (detected) { t.detected++; t.latSum += latency_ms; if (bp) bp.detected++; } else { t.missed++; }
-    // detection arrives a beat later (analytics lane)
-    setTimeout(() => {
-      onDetection?.({
-        kind: "detection", run_id: "run_sim_01", seq: evt.seq,
-        detected, rule: detected ? RULE[persona] : null, latency_ms,
-        confidence: detected ? 0.8 + Math.random() * 0.19 : 0.2 + Math.random() * 0.3,
-      });
-    }, 120 + Math.random() * 120);
+    if (typeof evt.absolute === "number") {
+      health = Math.max(0, Math.min(100, Math.round(evt.absolute)));
+    } else {
+      health = Math.max(0, Math.min(100, Math.round(health + (evt.health_delta || 0))));
+    }
+    evt.tower_health = health;
+    evt.seq = ++seq;
+    dispatch(evt);
   }
 
-  function wave(forceCritical = false) {
+  function wave() {
     const a = pick(AGENTS);
     const comp = pick(COMPONENTS[a.persona]);
-    emitEvent({ event_type: "attack_started", agent_id: a.id, agent_persona: a.persona, target_component: comp, description: `${a.persona} probing ${comp}` });
+    emit({ event_type: "attack_started", agent_id: a.id, agent_persona: a.persona, target_component: comp, description: `${a.persona} probing ${comp}` });
     setTimeout(() => {
-      const opts = RESULTS[a.persona];
-      let entry = forceCritical ? opts.find((r) => r[1] === "critical") : null;
-      if (!entry) entry = Math.random() < 0.6 ? pick(opts) : null;
-      if (entry) scored(a.persona, comp, "weakness_found", entry[1], entry[0]);
-      else scored(a.persona, comp, "attack_result", "low", `${a.persona}: ${comp} held (no weakness)`);
-    }, 420);
+      const [desc, sev] = pick(RESULTS[a.persona]);
+      if (Math.random() < 0.58) {
+        emit({ event_type: "weakness_found", agent_id: a.id, agent_persona: a.persona, target_component: comp, severity: sev, description: desc });
+      } else {
+        emit({ event_type: "attack_result", agent_id: a.id, agent_persona: a.persona, target_component: comp, severity: "low", description: `${a.persona}: ${comp} held (no weakness)` });
+      }
+    }, 450);
   }
 
-  function pushStats() {
-    const total = BASE.total + t.total;
-    const detected = BASE.detected + t.detected;
-    const missed = total - detected;
-    const latSum = BASE.latSum + t.latSum;
-    onStats?.({
-      kind: "stats", run_id: "run_sim_01",
-      coverage_pct: Number(((detected / total) * 100).toFixed(1)),
-      mttd_ms: Number((latSum / Math.max(1, detected)).toFixed(1)),
-      total_events: total, detected, missed,
-      by_persona: t.byPersona, by_severity: t.bySeverity,
-    });
-  }
-
+  // The rehearsable "money shot": a critical strike on demand.
   function critical() {
-    const a = pick([AGENTS[2], AGENTS[3], AGENTS[5]]); // injection / auth / logic
+    const a = pick([AGENTS[1], AGENTS[2], AGENTS[4]]); // injection / auth / logic
     const comp = pick(COMPONENTS[a.persona]);
-    emitEvent({ event_type: "attack_started", agent_id: a.id, agent_persona: a.persona, target_component: comp, description: `${a.persona} escalating on ${comp}` });
+    emit({ event_type: "attack_started", agent_id: a.id, agent_persona: a.persona, target_component: comp, description: `${a.persona} escalating on ${comp}` });
     setTimeout(() => {
-      // money shot: a CAUGHT critical (detected=true)
-      const desc = (RESULTS[a.persona].find((r) => r[1] === "critical") || [])[0] || "critical exploit chain confirmed";
-      const latency_ms = 5 + Math.floor(Math.random() * 8);
-      const evt = emitEvent({
-        event_type: "weakness_found", agent_id: a.id, agent_persona: a.persona,
-        target_component: comp, severity: "critical", description: desc, health_delta: -30,
-      });
-      t.total++; t.detected++; t.latSum += latency_ms;
-      t.bySeverity.critical = (t.bySeverity.critical || 0) + 1;
-      const bp = t.byPersona[a.persona]; if (bp) { bp.events++; bp.detected++; }
-      setTimeout(() => onDetection?.({
-        kind: "detection", run_id: "run_sim_01", seq: evt.seq,
-        detected: true, rule: RULE[a.persona], latency_ms, confidence: 0.98,
-      }), 120);
+      emit({ event_type: "weakness_found", agent_id: a.id, agent_persona: a.persona, target_component: comp, severity: "critical", description: pick(RESULTS[a.persona].filter(r => r[1] === "critical"))?.[0] || "critical exploit chain confirmed" });
     }, 650);
+  }
+
+
+  // Scripted realistic siege: plays the REAL findings over ~durationMs with a
+  // smooth linear health drain to 0, filling the feed with actual readings,
+  // then calls onComplete so the results page appears.
+  function playRealistic({ durationMs = 30000, onComplete } = {}) {
+    if (running) stop();
+    running = true; health = 100;
+    const start = Date.now();
+    emit({ event_type: "target_health", target_component: "tower", severity: "info", description: "siege begins", absolute: 100 });
+    const RECON_MS = Math.min(10000, Math.round(durationMs * 0.33)); // first ~10s: recon only, no damage
+    const attackWindow = durationMs - RECON_MS;
+    // constant probing so the jets are always moving
+    beat = setInterval(() => {
+      if (!running) return;
+      const a = pick(AGENTS);
+      emit({ event_type: "attack_started", agent_id: a.id, agent_persona: a.persona, target_component: pick(COMPONENTS[a.persona]), description: `${a.persona} probing…` });
+    }, 1300);
+    // phase 1 — recon maps the surface (no health damage)
+    const recon = REAL_TIMELINE.filter((f) => f.persona === "recon");
+    recon.forEach((f, i) => setTimeout(() => {
+      if (!running) return;
+      emit({ event_type: "weakness_found", agent_id: f.agent, agent_persona: f.persona, target_component: f.comp, severity: f.sev, description: f.desc, absolute: 100 });
+    }, 3000 + i * 3500));
+    // phase 2 — the real attacks land, paced, draining health linearly to 0
+    const attacks = REAL_TIMELINE.filter((f) => f.persona !== "recon");
+    const gap = attackWindow / (attacks.length + 1);
+    attacks.forEach((f, i) => {
+      setTimeout(() => {
+        if (!running) return;
+        const linear = Math.max(0, Math.round(100 * (1 - (Date.now() - start - RECON_MS) / attackWindow)));
+        emit({ event_type: "attack_started", agent_id: f.agent, agent_persona: f.persona, target_component: f.comp, description: `${f.persona} → ${f.comp}` });
+        setTimeout(() => { if (running) emit({ event_type: "weakness_found", agent_id: f.agent, agent_persona: f.persona, target_component: f.comp, severity: f.sev, description: f.desc, absolute: linear }); }, 420);
+      }, RECON_MS + gap * (i + 1));
+    });
+    // breach + finish → results
+    timer = setTimeout(() => {
+      emit({ event_type: "target_health", target_component: "tower", severity: "critical", description: "tower breached", absolute: 0 });
+      clearInterval(beat); running = false;
+      onComplete?.();
+    }, durationMs + 400);
   }
 
   return {
     get running() { return running; },
+    playRealistic,
     setHealth(h) { health = h; },
     start() {
       if (running) return;
       running = true;
-      timer = setInterval(() => wave(), 1100);
-      beat = setInterval(() => emitEvent({ event_type: "target_health", target_component: "tower", description: "heartbeat" }), 3000);
-      statsTimer = setInterval(pushStats, 1000);
-      pushStats();
+      timer = setInterval(wave, 1200);
+      beat = setInterval(() => emit({ event_type: "target_health", target_component: "tower", description: "heartbeat" }), 3000);
     },
     stop() {
       running = false;
-      clearInterval(timer); clearInterval(beat); clearInterval(statsTimer);
+      clearInterval(timer);
+      clearInterval(beat);
     },
     critical,
-    reset() { health = 100; emitEvent({ event_type: "target_health", target_component: "tower", description: "reset" }); pushStats(); },
+    reset() { health = 100; emit({ event_type: "target_health", target_component: "tower", description: "reset", absolute: 100 }); },
   };
 }

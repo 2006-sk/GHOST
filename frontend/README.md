@@ -1,80 +1,159 @@
-# GHOST — Frontend (the 3D siege, defensive)
+# Tower Under Siege — Frontend (Kenil's layer)
 
-The showstopper. Six autonomous red-team agents lay siege to a white wireframe
-tower; GHOST proves live that each hit is **detected and intercepted by a
-shield**, or scores the ones that **slip through and do damage**. The HUD shows
-**coverage %** and **detection latency** straight from the Coordinator (backed by
-ClickHouse). Vite + Three.js, vanilla JS, no framework.
+The visual demo. A **white wireframe target** stands on a black grid while a
+**swarm of five jets — one per agent — attacks it from every side**, driven
+live by the Coordinator's WebSocket feed. Everything is monochrome white-on-black
+line-art; severity reads through motion, brightness and weight, never color. A
+`critical` finding detonates a full-screen shockwave — the single biggest
+shock-factor moment for the submission video.
 
-Reskinned from the Tower Siege engine (`redteam@integration/frontend`) to the
-GHOST contract in `../docs/master.md` §4.
+Built for maximum legibility at demo pace: gradual integrity descent, punctuated
+by deliberate criticals you can fire on demand.
 
-## Run
+---
+
+## Quickstart
 
 ```bash
+cd frontend
 npm install
-npm run dev     # mock Coordinator on :8080 (/ws) + Vite on :5173
+npm run dev          # starts the mock backend (:8080) AND the web app (:5173)
 ```
 
-Open **http://localhost:5173** and click **Use demo target**, or go straight to a
-zero-backend rehearsal:
+Open **http://localhost:5173** — the siege begins immediately against the mock
+feed. That's it. No keys, no config.
 
-- **http://localhost:5173/?demo** — built-in simulator, no backend needed.
-- **http://localhost:5173/?demo&critical** — same, and auto-fires the money shot.
+Run the pieces separately if you prefer:
 
-Against the **real** Coordinator, run it on :8080 instead of `npm run mock` (or
-point the app elsewhere with `VITE_WS_URL` / `VITE_API_BASE`, or `?ws=` / `?api=`).
+```bash
+npm run mock         # just the mock Coordinator on :8080
+npm run web          # just the Vite app on :5173
+npm run build        # production bundle → dist/
+```
 
-### Scripts
-| script | does |
-|---|---|
-| `npm run dev` | mock Coordinator + web, together (solo frontend dev) |
-| `npm run web` | Vite only (talks to whatever Coordinator is on :8080) |
-| `npm run mock` | the bundled GHOST-contract mock Coordinator only |
-| `npm run build` | production build to `dist/` |
-
-## The two lanes (master.md §4.8)
-
-Every attack travels two ways at once:
-
-- **Visual lane** (`event`) — a jet lunges at the tower **immediately**. Never
-  waits on the database. `tower_health` on the event is authoritative.
-- **Analytics lane** (`detection`, matched by `seq`) — arrives ms later:
-  - `detected: true` → **shield intercept**: a cool dome ripple at the impact
-    point, no fracture.
-  - `detected: false` → the hit **lands**: outward shockwave + fracture + damage.
-
-Each strike's impact point is remembered by `seq`, so the shield-or-damage effect
-lands exactly where the jet hit, whenever the verdict shows up.
-
-## WebSocket it consumes (master.md §4.5)
-`snapshot` · `event` · `detection` · `stats` — routed in `src/net/wsClient.js`,
-wired in `src/main.js`. `snapshot.mode` drives the **MOCK** vs **LIVE** badge.
-
-## HTTP it sends (master.md §4.6)
-Folder-select → loading → siege calls `POST /api/prepare`, `GET /api/status`,
-`POST /api/run`. **C** → `GET /trigger/critical`, **R** → `GET /reset`. If the
-backend is down, it falls back to the local simulator so a recording never stalls.
+---
 
 ## Controls
-**C** fire critical (money shot) · **S** toggle simulator · **R** reset ·
-**T** / `1`–`6` swap target shape · **H** hide HUD (clean screenshot) · drag to orbit.
 
-## Design
-Monochrome white-on-black line art with two restrained accents — **cool =
-intercepted / shield held**, **warm = missed / damage got through** — always
-paired with a ✓ / ✗ glyph and a label, never color alone. Severity reads through
-brightness, weight, and motion.
+| key | action |
+|-----|--------|
+| **C** | fire a **critical** strike on demand (the money shot — use it in the recording) |
+| **S** | toggle the built-in **simulator** (runs with zero backend, for rehearsal) |
+| **R** | reset integrity to 100% |
+| **T** | cycle the target object (tower → core → server → reactor → pyramid → citadel) |
+| **1–6** | jump straight to a specific target object |
+| **H** | hide/show the HUD (clean plate for a screenshot) |
+| **drag** | orbit the camera · **scroll** to zoom |
+
+## The target can be any object
+
+The "tower" is just a white wireframe — swap it with **T** or number keys. Six
+presets ship (`tower`, `core`, `server`, `reactor`, `pyramid`, `citadel`); add
+your own in `src/scene/tower.js` (`build*()` — any Three.js geometry rendered as
+`EdgesGeometry` works). Start on a specific one with `?target=` in `config.js`
+or by editing `TOWER_PRESETS`.
+
+## URL parameters
+
+| param | effect |
+|-------|--------|
+| `?demo` or `?sim` | auto-start the built-in simulator — **no backend needed** |
+| `?critical` | (with `?demo`) auto-fire a critical a few seconds in |
+| `?nobloom` | disable the bloom glow (fallback for weak GPUs / headless) |
+| `?ws=ws://host:port` | point at a different feed (default `ws://localhost:8080`) |
+| `?api=http://host:port` | base for the critical/reset triggers (default `:8080`) |
+
+Example rehearsal link, zero setup: `http://localhost:5173/?demo&critical`
+
+---
+
+## The live feed it consumes
+
+Inbound only — a WebSocket to the Coordinator on `ws://localhost:8080`, in the
+**exact wire format** the real `tower-siege` Coordinator broadcasts:
+
+```jsonc
+// on connect — the current world, rendered immediately
+{ "kind": "snapshot", "tower_health": 100, "events": [ ...enriched events ], "briefing": {} }
+
+// then one per event, live
+{ "kind": "event",
+  "event_type": "attack_started | attack_result | weakness_found | target_health",
+  "agent_id": "agent-2", "agent_persona": "injection",
+  "target_component": "/api/search", "severity": "critical",
+  "description": "SQLi: ' OR 1=1 -- returned all rows",
+  "health_delta": -30, "timestamp": "…",
+  "tower_health": 55,   // Coordinator-authoritative — drives the health bar
+  "seq": 12 }
+```
+
+Animation mapping:
+
+- `attack_started` → the agent's jet dives in from its orbit, leaves a tracer
+- `weakness_found` → the jet **strikes** the surface: shockwave + spark + fracture + shudder, scaled by `severity`; `critical` adds a full-screen flash, camera shake and a big crack
+- `attack_result` → the jet **peels off** (held, no weakness) — visibly different from a strike
+- `target_health` → a heartbeat pulse of the whole structure
+
+`tower_health` on every event is authoritative, so the health bar stays correct
+even if events arrive slightly out of order (real agents run in parallel).
+`agent-1..5` map to `recon, injection, auth_bypass, dos, logic_abuse` — each on
+its own colored-by-position orbit so you can track who's doing what.
+
+---
+
+## Swapping the mock for the real Coordinator
+
+The mock speaks the identical wire format, so it's a drop-in swap — **the
+frontend doesn't change at all**. Just run the real feed on `:8080` instead of
+the mock:
+
+```bash
+# in ../tower-siege
+npm run mock          # schema-valid fake events (Shresth's version)
+# — or the real swarm —
+npm run target        # terminal A: the vulnerable stand-in
+LOOP=1 npm run swarm  # terminal B: Coordinator + 5 LLM-driven agents on :8080
+```
+
+Then run only the web app here: `npm run web`. Point elsewhere with
+`?ws=ws://host:port` if the Coordinator isn't on localhost.
+
+Keep the **S** (simulator) key handy even on the real feed — it's the rehearsal
+mode for shooting takes without live agents.
+
+---
+
+## The mock backend (`mock-server/server.mjs`)
+
+A self-contained stand-in for the Coordinator. Only dependency: `ws`. It mirrors
+the real health accounting (severity → damage, clamped 0–100) and wire format,
+runs a demo-friendly attack loop (gradual descent, escalations ~every 10 waves),
+and adds a few demo conveniences the real Coordinator doesn't need:
+
+| endpoint | does |
+|----------|------|
+| `GET /trigger/critical` | fire the money-shot critical strike |
+| `GET /trigger/wave` | fire one attack wave (`?severity=high` to force) |
+| `GET /reset` | restore integrity to 100 |
+| `GET /pause` · `/resume` | stop / start the auto loop |
+| `GET /health` · `/state` | liveness / full snapshot (parity with the real one) |
+| `POST /events` | ingest one event (parity) |
+
+---
 
 ## Files
+
 | path | role |
-|---|---|
-| `src/config.js` | WS/API URLs, 6-agent roster, severity map |
-| `src/net/wsClient.js` | socket client; routes the 4 message kinds |
-| `src/net/simulator.js` | zero-backend event+detection+stats source |
-| `src/main.js` | two-lane dispatch; shield-vs-damage matched by `seq` |
-| `src/scene/tower.js` | wireframe target + shield dome + `shieldPulse` |
-| `src/scene/swarm.js` | 6 jets, one per agent, orbit/dive/strike state machine |
-| `src/scene/effects.js` | outward shockwave (damage) + inward `shieldHit` (blocked) |
-| `src/ui/hud.js` | roster, integrity, coverage/latency tiles, detection feed, charts |
-| `mock-server/server.mjs` | GHOST-contract mock Coordinator for solo dev |
+|------|------|
+| `src/main.js` | wires the feed → scene + HUD; keyboard; the synced impact handler |
+| `src/config.js` | shared truth — mirrors `tower-siege/src/contract.mjs` |
+| `src/net/wsClient.js` | WebSocket client: reconnect + tolerant dispatch |
+| `src/net/simulator.js` | client-side event source (rehearsal / zero-backend) |
+| `src/scene/scene.js` | Three.js stage: camera, orbit controls, bloom, shake |
+| `src/scene/tower.js` | the white wireframe target + presets + fracture/health |
+| `src/scene/swarm.js` | the 5 jets + orbit/dive/strike/peel state machine |
+| `src/scene/effects.js` | shockwaves, sparks, tracers |
+| `src/ui/hud.js` | banner ticker, roster, integrity + breakdown charts |
+| `mock-server/server.mjs` | self-contained Coordinator-compatible mock |
+
+Stack: Vite + Three.js, vanilla JS. No framework.

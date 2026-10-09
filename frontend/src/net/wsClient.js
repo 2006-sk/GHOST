@@ -1,14 +1,13 @@
 // ── WebSocket client ────────────────────────────────────────────────────
 // Connects to the Coordinator (mock or real), reconnects with backoff, and
-// hands parsed messages to callbacks. Routes the four §4.5 kinds:
-//   snapshot · event · detection · stats
-// It assumes nothing about ordering: `tower_health` on each event is
-// authoritative for the health bar, `detection` is matched back to its event
-// by `seq`, and a bare (unwrapped) event still animates.
+// hands parsed messages to callbacks. It does NOT assume perfect ordering:
+// `tower_health` on every event is authoritative for the health bar, and each
+// event is dispatched on its own merits (the scene tolerates a weakness_found
+// that arrives without its attack_started).
 
 import { WS_URL } from "../config.js";
 
-export function connectFeed({ onSnapshot, onEvent, onDetection, onStats, onStatus }) {
+export function connectFeed({ onSnapshot, onEvent, onStatus }) {
   let ws = null;
   let closedByUs = false;
   let backoff = 500;
@@ -18,7 +17,7 @@ export function connectFeed({ onSnapshot, onEvent, onDetection, onStats, onStatu
     onStatus?.("connecting");
     try {
       ws = new WebSocket(WS_URL);
-    } catch {
+    } catch (err) {
       scheduleReconnect();
       return;
     }
@@ -35,14 +34,13 @@ export function connectFeed({ onSnapshot, onEvent, onDetection, onStats, onStatu
       } catch {
         return; // ignore malformed frames rather than crash the demo
       }
-      switch (msg.kind) {
-        case "snapshot":  onSnapshot?.(msg); break;
-        case "event":     onEvent?.(msg); break;
-        case "detection": onDetection?.(msg); break;
-        case "stats":     onStats?.(msg); break;
-        default:
-          // Be liberal: an unwrapped event still animates.
-          if (msg.event_type) onEvent?.(msg);
+      if (msg.kind === "snapshot") {
+        onSnapshot?.(msg);
+      } else if (msg.kind === "event") {
+        onEvent?.(msg);
+      } else if (msg.event_type) {
+        // Be liberal: a bare (unwrapped) event still animates.
+        onEvent?.(msg);
       }
     };
 

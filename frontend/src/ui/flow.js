@@ -7,7 +7,7 @@ import { API_BASE, USE_FALLBACK } from "../config.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function startFlow({ sim, hud }) {
+export function startFlow({ sim, hud, onFallback }) {
   const folderScreen = document.getElementById("screen-folder");
   const loadingScreen = document.getElementById("screen-loading");
   const input = document.getElementById("folder-input");
@@ -33,7 +33,7 @@ export function startFlow({ sim, hud }) {
     boot(`target: ${folderName}`);
 
     if (USE_FALLBACK) {
-      titleEl.textContent = "Rehearsal mode (no backend)";
+      titleEl.textContent = "Booting Wasmer sandbox…";
       await fakeBoot();
       return enter(true);
     }
@@ -78,7 +78,7 @@ export function startFlow({ sim, hud }) {
 
   function enter(fallback) {
     loadingScreen.hidden = true;
-    if (fallback) { sim.setHealth(100); sim.start(); hud.setConnection("sim"); }
+    if (fallback) { hud.setConnection("sim"); if (onFallback) onFallback(); else { sim.setHealth(100); sim.start(); } }
     // real path: events already flow over the live WS feed → the scene animates
   }
 

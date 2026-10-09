@@ -42,9 +42,8 @@ class Jet {
     this.index = index;
     this.onImpact = onImpact;
 
-    // Distinct orbit per agent → different sides of the tower. Six tilts so the
-    // 6th jet (netscan) gets its own ring and all read as "different sides."
-    const spreadIncl = [-1.0, -0.6, -0.2, 0.3, 0.7, 1.1][index] || 0; // radians tilt
+    // Distinct orbit per agent → different sides of the tower.
+    const spreadIncl = [-1.0, -0.6, -0.2, 0.3, 0.7, 1.1][index] || 0; // radians tilt (6 agents)
     this.orbit = {
       radius: 20 + index * 1.8,
       incl: spreadIncl,
@@ -68,7 +67,7 @@ class Jet {
     cone.rotateX(Math.PI / 2);
     const edges = new THREE.EdgesGeometry(cone);
     cone.dispose();
-    this.mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+    this.mat = new THREE.LineBasicMaterial({ color: agent.color ?? 0xffffff, transparent: true, opacity: 0.98 });
     this.mesh = new THREE.LineSegments(edges, this.mat);
     scene.add(this.mesh);
 
@@ -82,7 +81,7 @@ class Jet {
     const tg = new THREE.BufferGeometry();
     tg.setAttribute("position", new THREE.BufferAttribute(this.trailPts, 3));
     this.trailGeo = tg;
-    this.trail = new THREE.Line(tg, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 }));
+    this.trail = new THREE.Line(tg, new THREE.LineBasicMaterial({ color: agent.color ?? 0xffffff, transparent: true, opacity: 0.32 }));
     scene.add(this.trail);
   }
 
@@ -108,7 +107,7 @@ class Jet {
     const target = this.tower.randomAnchorWorld();
     this.aimPoint = target.clone();
     const standoff = target.clone().sub(this.centerVec()).setLength(this.tower.bounds.radius + 5).add(this.centerVec());
-    this.effects.tracer(this.pos, target);
+    this.effects.tracer(this.pos, target, this.agent.color);
     this.startMove(this.pos.clone(), standoff, 0.7, () => { this.state = "engage"; this.timer = 0; });
     this.state = "dive";
     this.stateLabel = "ATTACKING";
@@ -118,7 +117,7 @@ class Jet {
     const point = (this.aimPoint || this.tower.randomAnchorWorld()).clone();
     const sev = evt?.severity || "medium";
     this.startMove(this.pos.clone(), point, 0.22, () => {
-      this.onImpact?.(sev, point, evt);
+      this.onImpact?.(sev, point, this.agent);
       // bounce back out to the orbit
       const out = point.clone().sub(this.centerVec()).setLength(this.tower.bounds.radius + 10).add(this.centerVec());
       this.startMove(this.pos.clone(), out, 0.4, () => this.beginReturn());

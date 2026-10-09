@@ -19,29 +19,6 @@ export function createTower(scene, preset = "tower") {
   group.add(shards);
   const liveShards = [];
 
-  // ── Defensive shield ──
-  // A faint wireframe dome around the tower. Idles near-invisible; brightens and
-  // ripples outward from the impact point when a hit is INTERCEPTED (detected).
-  const SHIELD = 0xffffff; // monochrome (sunhacks look); reads as "defense" via
-                           // an inward shield ripple, distinct from outward damage
-  const shieldMat = new THREE.MeshBasicMaterial({
-    color: SHIELD, transparent: true, opacity: 0.0, wireframe: true,
-    side: THREE.DoubleSide, depthWrite: false,
-  });
-  let shieldMesh = null;
-  let shieldGlow = 0;      // 0..1 overall shield brightness, decays each frame
-  let shieldBaseline = 0;  // faint always-on presence (rises with coverage)
-  const shieldRipples = []; // { mesh, mat, t, dur, max }
-
-  function buildShield() {
-    if (shieldMesh) { group.remove(shieldMesh); shieldMesh.geometry.dispose(); }
-    const r = bounds.radius * 1.5 + 3;
-    const geo = new THREE.IcosahedronGeometry(r, 2);
-    shieldMesh = new THREE.Mesh(geo, shieldMat);
-    shieldMesh.position.y = bounds.height * 0.5;
-    group.add(shieldMesh);
-  }
-
   let anchors = []; // local-space surface points jets aim at
   let bounds = { radius: 6, height: 14 };
   let health = 100;
@@ -76,7 +53,6 @@ export function createTower(scene, preset = "tower") {
     else if (name === "citadel") buildCitadel();
     else buildTower();
     computeAnchors();
-    buildShield();
   }
 
   // ── presets ──
@@ -199,33 +175,6 @@ export function createTower(scene, preset = "tower") {
 
   function pulse() { breathe = 1; }
 
-  // Detected attack → the shield held. Brighten the dome and send a ripple
-  // outward from the impact point. No fracture, no shards (contrast with hit()).
-  function shieldPulse(worldPoint, severity) {
-    const sev = SEVERITY[severity] || SEVERITY.medium;
-    shieldGlow = Math.min(1, shieldGlow + 0.45 + sev.rank * 0.12);
-    const local = worldPoint
-      ? group.worldToLocal(worldPoint.clone())
-      : new THREE.Vector3(0, bounds.height / 2, 0);
-    const geo = new THREE.RingGeometry(0.2, 0.9, 32);
-    const mat = new THREE.MeshBasicMaterial({
-      color: SHIELD, transparent: true, opacity: 0.9,
-      side: THREE.DoubleSide, depthWrite: false,
-    });
-    const ring = new THREE.Mesh(geo, mat);
-    ring.position.copy(local);
-    // orient the ring to face outward from the tower centre
-    const normal = local.clone().setY(local.y - bounds.height * 0.5).normalize();
-    ring.lookAt(local.clone().add(normal));
-    group.add(ring);
-    shieldRipples.push({ mesh: ring, mat, geo, t: 0, dur: 0.55 + sev.rank * 0.08, max: 4 + sev.rank * 3 });
-  }
-
-  // Coverage % (0..100) raises the shield's faint always-on presence.
-  function setCoverage(pct) {
-    shieldBaseline = Math.max(0, Math.min(1, (Number(pct) || 0) / 100)) * 0.1;
-  }
-
   function spawnShard(origin, speed) {
     const size = 0.4 + Math.random() * 0.9;
     const tetra = new THREE.TetrahedronGeometry(size);
@@ -277,25 +226,6 @@ export function createTower(scene, preset = "tower") {
     const tilt = (1 - health / 100) * 0.12;
     group.rotation.z = tilt * Math.sin(performance.now() * 0.0006);
 
-    // shield: decay the glow toward the coverage baseline; animate ripples
-    shieldGlow += (shieldBaseline - shieldGlow) * Math.min(1, dt * 3.2);
-    if (shieldMesh) {
-      const shimmer = 0.6 + 0.4 * Math.abs(Math.sin(performance.now() * 0.0012));
-      shieldMat.opacity = Math.max(0, shieldGlow) * shimmer * 0.9;
-      shieldMesh.rotation.y -= dt * 0.05;
-    }
-    for (let i = shieldRipples.length - 1; i >= 0; i--) {
-      const rp = shieldRipples[i];
-      rp.t += dt / rp.dur;
-      const s = 0.2 + rp.t * rp.max;
-      rp.mesh.scale.set(s, s, s);
-      rp.mat.opacity = Math.max(0, 1 - rp.t) * 0.9;
-      if (rp.t >= 1) {
-        group.remove(rp.mesh); rp.geo.dispose(); rp.mat.dispose();
-        shieldRipples.splice(i, 1);
-      }
-    }
-
     // advance shards
     for (let i = liveShards.length - 1; i >= 0; i--) {
       const s = liveShards[i];
@@ -318,8 +248,6 @@ export function createTower(scene, preset = "tower") {
     setHealth,
     hit,
     pulse,
-    shieldPulse,
-    setCoverage,
     update,
     randomAnchorWorld,
     topWorld,

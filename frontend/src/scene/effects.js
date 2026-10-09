@@ -14,12 +14,12 @@ export function createEffects(scene) {
   }
 
   // Expanding wireframe sphere from the impact point.
-  function shockwave(point, severity = "medium") {
+  function shockwave(point, severity = "medium", color = 0xffffff) {
     const sev = SEVERITY[severity] || SEVERITY.medium;
     const maxR = 3 + sev.rank * 3.2;
     const geo = new THREE.IcosahedronGeometry(1, 1);
     const edges = new THREE.EdgesGeometry(geo);
-    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1 });
     const ring = new THREE.LineSegments(edges, mat);
     ring.position.copy(point);
     geo.dispose();
@@ -35,10 +35,10 @@ export function createEffects(scene) {
     });
 
     // a second, flat ground ripple for critical hits
-    if (sev.rank >= 4) shockwave2(point, maxR * 1.6);
+    if (sev.rank >= 4) shockwave2(point, maxR * 1.6, color);
   }
 
-  function shockwave2(point, maxR) {
+  function shockwave2(point, maxR, color = 0xffffff) {
     const seg = 64;
     const pos = new Float32Array((seg + 1) * 3);
     for (let i = 0; i <= seg; i++) {
@@ -47,7 +47,7 @@ export function createEffects(scene) {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1 });
     const ring = new THREE.LineLoop(g, mat);
     ring.position.set(point.x, 0.05, point.z);
     let t = 0;
@@ -61,7 +61,7 @@ export function createEffects(scene) {
   }
 
   // A quick outward burst of point sparks.
-  function spark(point, severity = "medium") {
+  function spark(point, severity = "medium", color = 0xffffff) {
     const sev = SEVERITY[severity] || SEVERITY.medium;
     const N = 14 + sev.rank * 10;
     const pos = new Float32Array(N * 3);
@@ -73,7 +73,7 @@ export function createEffects(scene) {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, transparent: true, opacity: 1 });
+    const mat = new THREE.PointsMaterial({ color, size: 0.55, transparent: true, opacity: 1 });
     const pts = new THREE.Points(g, mat);
     let t = 0;
     add(pts, (dt) => {
@@ -93,74 +93,15 @@ export function createEffects(scene) {
   }
 
   // A fast fading tracer line from a jet to its target as it dives.
-  function tracer(from, to) {
+  function tracer(from, to, color = 0xffffff) {
     const g = new THREE.BufferGeometry().setFromPoints([from.clone(), to.clone()]);
-    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 });
     const line = new THREE.Line(g, mat);
     let t = 0;
     add(line, (dt) => {
       t += dt / 0.35;
       mat.opacity = Math.max(0, 0.6 * (1 - t));
       if (t >= 1) { g.dispose(); mat.dispose(); return false; }
-      return true;
-    });
-  }
-
-  // ── Shield intercept (detected) ──────────────────────────────────────
-  // An inward-COLLAPSING cool ring + a short bright flare at the surface.
-  // Deliberately the inverse of shockwave() (which expands outward = damage),
-  // so "blocked" and "got through" read differently at a glance.
-  const SHIELD = 0xffffff; // monochrome; "blocked" reads via the inward collapse
-  function shieldHit(point, severity = "medium") {
-    const sev = SEVERITY[severity] || SEVERITY.medium;
-    const startR = 4 + sev.rank * 2.4;
-
-    // collapsing icosa ring (big → tight)
-    const geo = new THREE.IcosahedronGeometry(1, 1);
-    const edges = new THREE.EdgesGeometry(geo);
-    const mat = new THREE.LineBasicMaterial({ color: SHIELD, transparent: true, opacity: 1 });
-    const ring = new THREE.LineSegments(edges, mat);
-    ring.position.copy(point);
-    geo.dispose();
-    let t = 0;
-    const dur = 0.4 + sev.rank * 0.06;
-    add(ring, (dt) => {
-      t += dt / dur;
-      const r = startR * (1 - t) + 0.3;
-      ring.scale.setScalar(Math.max(0.1, r));
-      mat.opacity = Math.max(0, 1 - t * t) * 0.95;
-      if (t >= 1) { edges.dispose(); mat.dispose(); return false; }
-      return true;
-    });
-
-    // inward-converging spark motes that get ABSORBED (toward the point)
-    const N = 12 + sev.rank * 6;
-    const pos = new Float32Array(N * 3);
-    const home = [];
-    const vel = [];
-    for (let i = 0; i < N; i++) {
-      const dir = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
-      const start = point.clone().add(dir.multiplyScalar(startR));
-      pos[i * 3] = start.x; pos[i * 3 + 1] = start.y; pos[i * 3 + 2] = start.z;
-      home.push(point);
-      vel.push(start.sub(point).multiplyScalar(-2.2)); // head back toward the point
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const pmat = new THREE.PointsMaterial({ color: SHIELD, size: 0.5, transparent: true, opacity: 1 });
-    const pts = new THREE.Points(g, pmat);
-    let tp = 0;
-    add(pts, (dt) => {
-      tp += dt / 0.45;
-      const arr = g.attributes.position.array;
-      for (let i = 0; i < N; i++) {
-        arr[i * 3] += vel[i].x * dt;
-        arr[i * 3 + 1] += vel[i].y * dt;
-        arr[i * 3 + 2] += vel[i].z * dt;
-      }
-      g.attributes.position.needsUpdate = true;
-      pmat.opacity = Math.max(0, 1 - tp);
-      if (tp >= 1) { g.dispose(); pmat.dispose(); return false; }
       return true;
     });
   }
@@ -172,5 +113,5 @@ export function createEffects(scene) {
     }
   }
 
-  return { shockwave, spark, tracer, shieldHit, update };
+  return { shockwave, spark, tracer, update };
 }
