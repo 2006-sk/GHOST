@@ -13,3 +13,7 @@ node_modules/
 
 # runtime
 *.pid
+
+# python
+__pycache__/
+*.pyc
