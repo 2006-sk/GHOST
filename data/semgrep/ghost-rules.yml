@@ -1,0 +1,78 @@
+# GHOST — custom Semgrep rules tuned for the TowerBank (attacky) target.
+# Generic registry rules key off known library sinks (jsonwebtoken, pg, …);
+# TowerBank's flaws live in hand-rolled code, so these rules name those sinks
+# directly. Run alongside the registry packs:
+#   semgrep scan --config data/semgrep/ghost-rules.yml --config p/owasp-top-ten attacky/
+rules:
+  - id: ghost-sqli-user-input-to-query
+    languages: [javascript]
+    severity: ERROR
+    mode: taint
+    message: >
+      User-controlled input flows into unsafeQuery()/db.query() without
+      parameterization — SQL injection. Use parameterized queries; never build
+      SQL by string concatenation.
+    metadata: { cwe: "CWE-89: SQL Injection", owasp: "A03:2021-Injection", persona: injection }
+    pattern-sources:
+      - pattern: req.body
+      - pattern: req.query
+      - pattern: req.params
+    pattern-sinks:
+      - pattern: unsafeQuery(...)
+      - pattern: $DB.query(...)
+
+  - id: ghost-secrets-in-http-response
+    languages: [javascript]
+    severity: ERROR
+    message: >
+      Server secrets / full environment returned in an HTTP response
+      (info disclosure). Whitelist fields and require admin auth; keep secrets
+      in a vault.
+    metadata: { cwe: "CWE-200: Information Exposure", owasp: "A01:2021", persona: auth_bypass }
+    patterns:
+      - pattern: res.json($X)
+      - metavariable-pattern:
+          metavariable: $X
+          patterns:
+            - pattern-either:
+                - pattern: SERVER_SECRETS
+                - pattern: process.env
+
+  - id: ghost-jwt-alg-none-accepted
+    languages: [javascript]
+    severity: ERROR
+    message: >
+      JWT verifier treats alg:"none" as valid and never checks a signature —
+      forged tokens are accepted (auth bypass). Pin algorithms and verify the
+      signature.
+    metadata: { cwe: "CWE-347: Improper Verification of Cryptographic Signature", persona: auth_bypass }
+    pattern-either:
+      - pattern: if (<... $H.alg === "none" ...>) { ... }
+      - pattern: $H.alg === "none"
+
+  - id: ghost-reflected-input-in-html
+    languages: [javascript]
+    severity: ERROR
+    mode: taint
+    message: >
+      User input is reflected into an HTML response unescaped — reflected XSS.
+      Contextually escape output and set a strict Content-Security-Policy.
+    metadata: { cwe: "CWE-79: Cross-site Scripting", owasp: "A03:2021", persona: injection }
+    pattern-sources:
+      - pattern: req.query
+      - pattern: req.body
+    pattern-sinks:
+      - pattern: res.send(...)
+
+  - id: ghost-unvalidated-money-amount
+    languages: [javascript]
+    severity: WARNING
+    message: >
+      A money amount/quantity from the request is used without a positivity or
+      ownership check — negative-amount / transfer logic abuse. Validate amount > 0,
+      verify ownership, and use signed, idempotent operations.
+    metadata: { cwe: "CWE-840: Business Logic Errors", persona: logic_abuse }
+    patterns:
+      - pattern-either:
+          - pattern: $ACCT.balance -= $AMT
+          - pattern: $ACCT.balance += $AMT

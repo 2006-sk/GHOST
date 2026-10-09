@@ -4,7 +4,7 @@
 import { ingestEvent } from './ingest.js';
 import { getHealth, resetRun, getMode } from './health.js';
 import { getStats, chEnabled } from './clickhouse.js';
-import { pgEnabled } from './postgres.js';
+import { pgEnabled, pgMode, listRuns, listAgentsForRun, recordRunEnd } from './postgres.js';
 import { clientCount } from './ws.js';
 import { prepare, run, stop, getStatus, guildStatus } from './orchestrator.js';
 import { mockLoopRunning } from './mock-loop.js';
@@ -42,12 +42,26 @@ export function registerRoutes(app, { MOCK }) {
     res.status(out.ok ? 200 : 400).json({ ...out, run_id: activeRun });
   });
 
-  app.post('/api/stop', (_req, res) => res.json(stop()));
+  app.post('/api/stop', async (_req, res) => {
+    const out = stop();
+    const stats = await getStats(activeRun).catch(() => null);
+    recordRunEnd(activeRun, stats?.coverage_pct); // persist run end + final coverage
+    res.json(out);
+  });
 
   // Guild control-plane status: authenticated? which ghost personas deployed?
   app.get('/api/guild/status', async (_req, res) => {
     try { res.json(await guildStatus()); }
     catch (err) { res.status(500).json({ authenticated: false, error: err.message }); }
+  });
+
+  // Postgres mutable state (runs + per-agent state) — proves it's not a no-op.
+  app.get('/api/runs', async (_req, res) => {
+    const runs = await listRuns(20).catch(() => []);
+    res.json({ postgres: pgMode, runs });
+  });
+  app.get('/api/runs/:id/agents', async (req, res) => {
+    res.json({ run_id: req.params.id, agents: await listAgentsForRun(req.params.id).catch(() => []) });
   });
 
   // --- the money shot -------------------------------------------------------
@@ -94,7 +108,7 @@ export function registerRoutes(app, { MOCK }) {
       uptime_s: Math.round(process.uptime()),
       mode: mode(),
       clickhouse: chEnabled ? 'wired' : 'in-memory',
-      postgres: pgEnabled ? 'wired' : 'off',
+      postgres: pgMode, // 'embedded' (PGlite) or 'remote'
       ws_clients: clientCount(),
     });
   });

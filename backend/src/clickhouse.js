@@ -125,21 +125,34 @@ function statsFromTally(run_id) {
   };
 }
 
+// Aditya's stats.sql (data/clickhouse/stats.sql) — returns coverage/mttd AND the
+// by_persona / by_severity breakdowns straight from ClickHouse as nested JSON.
+// Inner aliases (det/mttd) differ from column names on purpose: aliasing
+// countIf(detected) AS detected shadows the column and breaks avgIf(..., detected).
+const STATS_SQL = `
+SELECT
+  t.total_events                                            AS total_events,
+  t.det                                                     AS detected,
+  t.total_events - t.det                                    AS missed,
+  if(t.total_events = 0, 0, round(100 * t.det / t.total_events, 1)) AS coverage_pct,
+  round(ifNotFinite(t.mttd, 0), 1)                          AS mttd_ms,
+  p.m                                                       AS by_persona,
+  s.m                                                       AS by_severity
+FROM
+( SELECT count() AS total_events, countIf(detected) AS det, avgIf(detect_latency_ms, detected) AS mttd
+  FROM ${CH_DB}.events WHERE run_id = {run:String} ) AS t
+CROSS JOIN
+( SELECT mapFromArrays(groupArray(agent_persona), groupArray(map('events', n, 'detected', d))) AS m
+  FROM ( SELECT agent_persona, count() AS n, countIf(detected) AS d
+         FROM ${CH_DB}.events WHERE run_id = {run:String} GROUP BY agent_persona ) ) AS p
+CROSS JOIN
+( SELECT mapFromArrays(groupArray(severity), groupArray(n)) AS m
+  FROM ( SELECT severity, count() AS n
+         FROM ${CH_DB}.events WHERE run_id = {run:String} AND severity != '' GROUP BY severity ) ) AS s
+FORMAT JSONEachRow
+SETTINGS output_format_json_quote_64bit_integers = 0`;
+
 async function statsFromClickHouse(run_id) {
-  // Aditya owns the exact stats.sql; this is the HTTP shape we expect.
-  // NOTE: do not alias a column with countIf(detected) AS detected — the alias
-  // shadows the `detected` column and breaks avgIf(..., detected). Use distinct
-  // alias names and reference the column directly inside the If-aggregates.
-  const sql = `
-    SELECT
-      count() AS total_events,
-      countIf(detected) AS detected_n,
-      countIf(NOT detected) AS missed,
-      round(100 * countIf(detected) / count(), 1) AS coverage_pct,
-      round(avgIf(detect_latency_ms, detected), 1) AS mttd_ms
-    FROM ${CH_DB}.events
-    WHERE run_id = {run:String}
-    FORMAT JSON`;
   try {
     const url = new URL(CH_URL);
     url.searchParams.set('param_run', run_id);
@@ -149,24 +162,22 @@ async function statsFromClickHouse(run_id) {
         'Content-Type': 'text/plain',
         Authorization: 'Basic ' + Buffer.from(`${CH_USER}:${CH_PASSWORD}`).toString('base64'),
       },
-      body: sql,
+      body: STATS_SQL,
     });
     if (!res.ok) return null;
-    const json = await res.json();
-    const row = json.data?.[0];
-    if (!row) return null;
-    // merge persona/severity breakdowns from the local tally (cheap, already live)
-    const local = statsFromTally(run_id);
+    const text = (await res.text()).trim();
+    if (!text) return null;
+    const row = JSON.parse(text.split('\n')[0]); // JSONEachRow → one object per line
     return {
       kind: 'stats',
       run_id,
       coverage_pct: Number(row.coverage_pct) || 0,
       mttd_ms: Number(row.mttd_ms) || 0,
       total_events: Number(row.total_events) || 0,
-      detected: Number(row.detected_n) || 0,
+      detected: Number(row.detected) || 0,
       missed: Number(row.missed) || 0,
-      by_persona: local.by_persona,
-      by_severity: local.by_severity,
+      by_persona: row.by_persona || {},   // { persona: { events, detected } } — from ClickHouse
+      by_severity: row.by_severity || {}, // { severity: count } — from ClickHouse
     };
   } catch (err) {
     console.error('[clickhouse] stats error', err.message);

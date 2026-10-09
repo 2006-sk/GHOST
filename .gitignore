@@ -17,3 +17,7 @@ node_modules/
 # python
 __pycache__/
 *.pyc
+
+# embedded postgres (PGlite)
+.pgdata/
+**/.pgdata/
