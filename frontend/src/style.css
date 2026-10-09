@@ -98,9 +98,11 @@ html, body {
   align-items: flex-start;
 }
 #brand .title {
-  font-size: 22px;
-  letter-spacing: 0.42em;
-  font-weight: 700;
+  font-size: 38px;
+  letter-spacing: 0.34em;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 22px rgba(255,255,255,0.35);
 }
 #brand .subtitle {
   font-size: 11px;

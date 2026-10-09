@@ -52,7 +52,12 @@ const nowIso = () => new Date().toISOString();
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname as _dn } from 'node:path';
+const DEMO_MS = Number(process.env.DEMO_DURATION_MS || 0); // >0 → paced demo replay
 const USE_CACHE = process.env.REAL_CACHE !== '0' && !process.argv.includes('--no-cache');
+// Demo mode is CACHED, never live: it replays the stored real-LLM results and
+// never calls the model (deterministic, no cost, no wait). Live LLM is a separate
+// option (run without DEMO_DURATION_MS).
+const CACHE_ONLY = DEMO_MS > 0 || process.env.DEMO_CACHE_ONLY === '1';
 const CACHE_FILE = new URL('../.cache/real-attack-llm.json', import.meta.url).pathname;
 let CACHE = {};
 if (USE_CACHE && existsSync(CACHE_FILE)) { try { CACHE = JSON.parse(readFileSync(CACHE_FILE, 'utf8')); } catch { CACHE = {}; } }
@@ -81,10 +86,12 @@ async function llm(messages, { max_tokens = 3000, cacheKey } = {}) {
   if (USE_CACHE && cacheKey) {
     const k = keyOf(cacheKey);
     if (CACHE[k] != null) { cacheHits++; return CACHE[k]; }
+    if (CACHE_ONLY) { cacheMiss++; return ''; } // demo: never call the live model
     const out = await llmRaw(messages, max_tokens);
     CACHE[k] = out; cacheMiss++; saveCache();
     return out;
   }
+  if (CACHE_ONLY) return '';
   return llmRaw(messages, max_tokens);
 }
 
@@ -177,8 +184,7 @@ function interleave(lists) {
 }
 
 async function main() {
-  const DEMO_MS = Number(process.env.DEMO_DURATION_MS || 0); // >0 → stretch the replay over this long
-  console.error(`${DEMO_MS ? 'DEMO' : 'REAL'} attack · model=${MODEL} · target=${TARGET} · run=${RUN_ID}${DEMO_MS ? ` · paced ${Math.round(DEMO_MS/1000)}s` : ''}`);
+  console.error(`${DEMO_MS ? 'DEMO (cached)' : 'REAL'} attack · ${DEMO_MS ? 'replay' : 'model=' + MODEL} · target=${TARGET} · run=${RUN_ID}${DEMO_MS ? ` · paced ${Math.round(DEMO_MS/1000)}s` : ''}`);
 
   // BUILD everything first (cached LLM + real HTTP → fast). recon leads.
   const reconEvents = await buildPersona(AGENTS[0]);

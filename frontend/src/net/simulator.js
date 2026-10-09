@@ -24,7 +24,7 @@ const RESULTS = {
 };
 
 
-// The REAL APEX findings, interleaved across all 5 agents — descriptions match
+// The REAL GHOST findings, interleaved across all 5 agents — descriptions match
 // the results-page remediation lookup so the fallback reads like a real run.
 const REAL_TIMELINE = [
   { agent: "agent-1", persona: "recon",       comp: "/robots.txt",          sev: "info",     desc: "recon: mapped surface — /admin, /api/internal/config, /api/export are staff-only" },
