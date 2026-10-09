@@ -178,22 +178,38 @@ html, body {
 
 /* Banner / ticker */
 #banner { grid-area: banner; align-self: start; justify-self: end; width: 100%; max-width: 380px; }
-#banner-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* scrollable feed: compact rows, newest on top, scroll the overflow */
+#banner-list {
+  list-style: none; margin: 0; padding: 0 4px 0 0;
+  display: flex; flex-direction: column; gap: 5px;
+  max-height: calc(100vh - 230px); overflow-y: auto; overflow-x: hidden;
+  pointer-events: auto; /* HUD is click-through; the feed is interactive */
+  scrollbar-width: thin; scrollbar-color: var(--w-faint) transparent;
+}
+#banner-list::-webkit-scrollbar { width: 6px; }
+#banner-list::-webkit-scrollbar-thumb { background: var(--w-faint); border-radius: 3px; }
 .wk {
   border: 1px solid var(--line);
   border-left-width: 3px;
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.4);
+  padding: 7px 10px;
+  background: rgba(0, 0, 0, 0.55);
   transform-origin: right center;
+  cursor: pointer;
 }
+.wk:hover { background: rgba(255,255,255,0.06); }
 .wk.enter { animation: wkin 0.5s cubic-bezier(0.2, 0.9, 0.2, 1); }
 @keyframes wkin {
   0% { transform: translateX(24px) scaleY(0.6); opacity: 0; border-left-color: #fff; box-shadow: 0 0 24px rgba(255,255,255,0.6); }
   100% { transform: none; opacity: 1; }
 }
-.wk .wk-head { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.16em; color: var(--w-dim); }
-.wk .wk-sev { color: var(--w); font-weight: 700; }
-.wk .wk-desc { font-size: 12px; margin-top: 4px; line-height: 1.35; }
+.wk .wk-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 10px; letter-spacing: 0.16em; color: var(--w-dim); }
+.wk .wk-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.wk .wk-sev { color: var(--w); font-weight: 700; flex: none; }
+.wk .wk-chev { flex: none; color: var(--w-faint); transition: transform 0.2s; font-size: 9px; }
+.wk.open .wk-chev { transform: rotate(180deg); }
+/* compact by default: description hidden until the row is clicked */
+.wk .wk-desc { font-size: 12px; margin-top: 0; line-height: 1.35; max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.25s ease, opacity 0.2s, margin-top 0.2s; }
+.wk.open .wk-desc { max-height: 320px; opacity: 1; margin-top: 5px; }
 /* severity weight via left-border brightness + thickness */
 .wk.sev-low     { border-left-color: var(--w-faint); }
 .wk.sev-medium  { border-left-color: var(--w-dim); }

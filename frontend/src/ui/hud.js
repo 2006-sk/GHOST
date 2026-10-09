@@ -93,14 +93,18 @@ export function createHud() {
     const sev = SEVERITY[evt.severity] || SEVERITY.info;
     const li = document.createElement("li");
     li.className = `wk enter sev-${evt.severity}`;
+    // compact: only a title phrase (agent · endpoint + severity) shows; the full
+    // description is hidden until the row is clicked (then it expands).
     li.innerHTML = `
       <div class="wk-head">
-        <span>${PERSONA_LABEL[evt.agent_persona] || evt.agent_id || "AGENT"} · ${escapeHtml(evt.target_component || "")}</span>
+        <span class="wk-title">${PERSONA_LABEL[evt.agent_persona] || evt.agent_id || "AGENT"} · ${escapeHtml(evt.target_component || "")}</span>
         <span class="wk-sev">${sev.label}</span>
+        <span class="wk-chev">▾</span>
       </div>
       <div class="wk-desc">${escapeHtml(evt.description || "")}</div>`;
+    li.addEventListener("click", () => li.classList.toggle("open"));
     el.bannerList.prepend(li);
-    while (el.bannerList.children.length > 6) el.bannerList.lastChild.remove();
+    while (el.bannerList.children.length > 50) el.bannerList.lastChild.remove();
     setTimeout(() => li.classList.remove("enter"), 600);
   }
 
